@@ -1,19 +1,31 @@
 from accordion import Accordion, Chord
-from tkinter import Tk, Label, Entry, Button, Text, messagebox
+from tkinter import Tk, Label, Entry, Button, Text, messagebox, END
 
 def on_closing ():
 	root.iconify()
 
-def on_change (action,initial_value,final_value,action_type):
+def on_change (action,initial_value,new_value,action_type):
+	# Check if the new value is a valid number
 	valid_num = False
 	try:
-		float(final_value)
+		float(new_value)
 		valid_num = True
 	except:
 		pass
-	if valid_num or final_value == "" or final_value in ('-','.'):
+	# If it's a valid number or blank, then it's a valid entry
+	if valid_num or new_value == "":
+		other_entry.delete(0,END)
+		other_entry.insert(0,'Valid')
 		return True
-	return False
+	# Otherwise, it's an invalid entry that shouldn't be saved
+	other_entry.delete(0,END)
+	other_entry.insert(0,'Invalid')
+	# However, we should check for the parts of a number, in case it's partially typed in
+	for char in new_value:
+		if char not in '-.0123456789':
+			return False
+	# All of the characters are valid, even if it's not a valid number, so allow it to be typed
+	return True
 
 if __name__ == '__main__':
 	root = Tk()
@@ -35,7 +47,8 @@ if __name__ == '__main__':
 	button.grid(row=0,column=1)
 	inner_accordion = Accordion(second_chord)
 	inner_chord1 = Chord(inner_accordion,title='Inner Chord 1',bg='red')
-	Entry(inner_chord1).pack()
+	other_entry = Entry(inner_chord1)
+	other_entry.pack()
 	inner_chord2 = Chord(inner_accordion,title='Inner Chord 2',bg='red')
 	Label(inner_chord2,text='I\'m inside...').pack()
 	inner_accordion.append_chords([inner_chord1,inner_chord2])
