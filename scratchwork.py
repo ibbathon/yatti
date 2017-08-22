@@ -1,5 +1,6 @@
-from accordion import Accordion, Chord
-from tkinter import Tk, Label, Entry, Button, Text, messagebox, END
+from section import Section
+from tkinter import Tk, Frame, Label, Entry, Button, Text, messagebox, END
+import time
 
 def on_closing ():
 	root.iconify()
@@ -14,12 +15,8 @@ def on_change (action,initial_value,new_value,action_type):
 		pass
 	# If it's a valid number or blank, then it's a valid entry
 	if valid_num or new_value == "":
-		other_entry.delete(0,END)
-		other_entry.insert(0,'Valid')
 		return True
 	# Otherwise, it's an invalid entry that shouldn't be saved
-	other_entry.delete(0,END)
-	other_entry.insert(0,'Invalid')
 	# However, we should check for the parts of a number, in case it's partially typed in
 	for char in new_value:
 		if char not in '-.0123456789':
@@ -27,40 +24,62 @@ def on_change (action,initial_value,new_value,action_type):
 	# All of the characters are valid, even if it's not a valid number, so allow it to be typed
 	return True
 
+def pad_int (val, min_digits, char='0'):
+	string = str(val)
+	if min_digits > len(string):
+		string = char*(min_digits-len(string))+string
+	return string
+
+def tick ():
+	timer_end_time = time.time()
+	el_time = int(timer_end_time-timer_start_time)
+	el_time_seconds = el_time % 60
+	el_time_minutes = int(el_time / 60) % 60
+	el_time_hours = int(el_time / 3600)
+	el_time_as_string = pad_int(el_time_seconds,2)
+	if el_time_minutes > 0 or el_time_hours > 0:
+		el_time_as_string = pad_int(el_time_minutes,2)+':'+el_time_as_string
+		if el_time_hours > 0:
+			el_time_as_string = pad_int(el_time_hours,2)+':'+el_time_as_string
+	other_entry.delete(0,END)
+	other_entry.insert(0,el_time_as_string)
+	other_entry.after(500,tick)
+
 if __name__ == '__main__':
 	root = Tk()
 	on_change_reg = root.register(on_change)
 
-	# create the Accordion
-	acc = Accordion(root)
+	# first section
+	section1 = Section(root, text='First Section')
+	section1.pack(fill='x', expand=True, anchor='nw')
+	Label(section1.sub_frame, text='Inside first section', bg='white').pack(expand=False,
+			anchor='w')
 
-	# first chord
-	first_chord = Chord(acc, title='First Chord', bg='white')
-	Label(first_chord, text='Inside first chord', bg='white').pack()
+	# second section
+	section2 = Section(root, text='Second Section')
+	section2.pack(fill='x', expand=True, anchor='nw')
+	line_frame = Frame(section2.sub_frame)
+	line_frame.pack(expand=True, anchor='w')
+	Entry(line_frame, validate='all',
+		validatecommand=(on_change_reg,'%d','%s','%P','%V')).pack(side='left')
+	Button(line_frame, text='Actually Quit', command=root.destroy).pack(side='left')
+	inner_section1 = Section(section2.sub_frame,text='Inner Section 1')
+	inner_section1.pack(fill='x', expand=True, anchor='nw')
+	other_entry = Entry(inner_section1.sub_frame)
+	other_entry.pack(anchor='w')
+	inner_section2 = Section(section2.sub_frame,text='Inner Section 2')
+	inner_section2.pack(fill='x', expand=True, anchor='nw')
+	Label(inner_section2.sub_frame,text='I\'m inside...').pack(anchor='w')
 
-	# second chord
-	second_chord = Chord(acc, title='Second Chord', bg='white')
-	entry = Entry(second_chord, validate='all',
-		validatecommand=(on_change_reg,'%d','%s','%P','%V'))
-	entry.grid(row=0,column=0)
-	button = Button(second_chord, text='Actually Quit', command=root.destroy)
-	button.grid(row=0,column=1)
-	inner_accordion = Accordion(second_chord)
-	inner_chord1 = Chord(inner_accordion,title='Inner Chord 1',bg='red')
-	other_entry = Entry(inner_chord1)
-	other_entry.pack()
-	inner_chord2 = Chord(inner_accordion,title='Inner Chord 2',bg='red')
-	Label(inner_chord2,text='I\'m inside...').pack()
-	inner_accordion.append_chords([inner_chord1,inner_chord2])
-	inner_accordion.grid(row=1,column=0,columnspan=2,sticky='w')
-
-	# third chord
-	third_chord = Chord(acc, title='Third Chord', bg='white')
-	Text(third_chord).pack()
-
-	# append list of chords to Accordion instance
-	acc.append_chords([first_chord, second_chord, third_chord])
-	acc.pack()
+	# third section
+	section3 = Section(root, text='Third Section')
+	section3.pack(fill='x', expand=True, anchor='nw')
+	Text(section3.sub_frame).pack(anchor='w')
 
 	root.protocol("WM_DELETE_WINDOW",on_closing)
+
+	# Start a timer before starting the Tk loop
+	timer_start_time = time.time()
+	other_entry.after(500,tick)
+
 	root.mainloop()
