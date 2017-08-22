@@ -28,4 +28,7 @@ Add all of the following as tickets in whatever ticket-tracking system I use.
 |                            |                                  |
 *---------------------------------------------------------------*
 Obviously, we need a properly-drawn version of that. Legend: RO means read-only, while ticking means it updates as we sit on the page. Angle brackets indicate a button.
+7) Within the timer button, the ticket number should be font size 20, while the description should be font size 11-12. Ideally, this would be configurable in the settings.
+8) Add option to auto-merge timeslots if the new start time is within a reasonable interval from the most recent end time (or is before it).
+9) The calendar should box the current day and highlight the selected day.
 
