@@ -1,7 +1,7 @@
 """timerbutton module
 Author = Richard D. Fears
 Created = 2017-08-22
-LastModified = 2017-08-22
+LastModified = 2017-08-23
 Description = Provides the TimerButton Tk widget, which contains a timer label, timer description,
 	and button to start/stop the timer.
 """
@@ -21,50 +21,45 @@ class TimerButton (tk.Frame):
 		'title':"TIMER",
 		'description':"Default timer"
 	}
-	DEFAULT_SETTINGS = {
+	DEFAULT_THEME = {
+		'base':{
+			'widget':{'bd':2,'relief':'raised',},
+			'title':{'fg':'black',},
+			'desc':{'fg':'black',},
+			'time':{'fg':'black',},
+			'start':{'fg':'green','width':4,'height':2,},
+		},
+		'active':{
+			'widget':{'relief':'sunken',},
+			'title':{'fg':'dark green',},
+			'desc':{'fg':'dark green',},
+			'time':{'fg':'dark green',},
+			'start':{'fg':'red',},
+		},
 		'fonts':{
-			'title':{
-				'size':20,
-				'color inactive':'black',
-				'color active':'dark green'
-			},
-			'desc':{
-				'size':12,
-				'color inactive':'black',
-				'color active':'dark green'
-			},
-			'time':{
-				'size':24,
-				'color inactive':'black',
-				'color active':'dark green'
-			},
-			'start':{
-				'size':12,
-				'color inactive':'green',
-				'color active':'red',
-				'width':4,
-				'height':2
-			}
-		}
+			'title':{'size':20,},
+			'desc':{'size':12,},
+			'time':{'size':24,},
+			'start':{'size':12,}
+		},
 	}
 
-	def __init__ (self, parent, timerdata=None, timersettings=None,
-		bd=2, relief='raised', *args, **options):
+	def __init__ (self, parent, timerdata=None, timertheme=None, *args, **options):
 		"""TimerButton constructor
 		timer_data is the dict corresponding to the timer being created. title is the very-short
 		description of the timer (<15 chars). description is a longer description and will be
 		truncated appropriately.
 		"""
-		super().__init__(parent,bd=bd,relief=relief,*args,**options)
+		super().__init__(parent,*args,**options)
 
 		# Initialize the callbacks array for when the toggle function is called
 		self._toggle_callbacks = []
 
-		# If the timerdata or settings parameters are given, use them so that we can modify
+		# If the timerdata or timertheme parameters are given, use them so that we can modify
 		# the values elsewhere in the program. If the parameters were not given, or were not
 		# complete, use the default values.
 		self._data = helper.dictFromDefaults(timerdata,self.DEFAULT_DATA)
-		self._settings = helper.dictFromDefaults(timersettings,self.DEFAULT_SETTINGS)
+		self._theme = helper.dictFromDefaults(timertheme,self.DEFAULT_THEME)
 
 		# Build the title and description labels
 		tk.Grid.columnconfigure(self,1,weight=1)
@@ -90,9 +85,9 @@ class TimerButton (tk.Frame):
 			command=self._toggle,font=self._start_font,variable=self._running,indicatoron=False)
 		self._start_button.grid(column=3,row=1,rowspan=2)
 
-		# Update the settings from the dicts
+		# Update the theme from the dicts
 		self.update_data()
-		self.update_settings()
+		self.update_theme()
 
 	def _toggle (self):
 		"""_toggle internal function
@@ -102,15 +97,13 @@ class TimerButton (tk.Frame):
 			self._start_button.configure(text=helper.PAUSE_CHAR)
 			self._curr_start_time = time.time()
 			self._timer_updater = self.after(500,self._update_timer)
-			self.configure(relief='sunken')
 		else:
 			self._start_button.configure(text=helper.PLAY_CHAR)
 			self.after_cancel(self._timer_updater)
 			self._update_timer(restarttimer=False,storetime=True)
 			self._curr_start_time = None
-			self.configure(relief='raised')
 		# Update the font colors
-		self.update_settings()
+		self._update_active_theme()
 		# Call the toggle callback functions
 		for f in self._toggle_callbacks:
 			f(self)
@@ -159,26 +152,32 @@ class TimerButton (tk.Frame):
 		self._title_label.configure(text=self._data['title'])
 		self._desc_label.configure(text=self._data['description'])
 
-	def update_settings (self):
-		"""update_settings function
-		Updates the fonts from the settings attribute. Used when the user changes the settings.
+	def update_theme (self):
+		"""update_theme function
+		Updates the fonts from the theme attribute. Used when the user changes the theme.
 		"""
-		self._title_font.configure(size=self._settings['fonts']['title']['size'])
-		self._desc_font.configure(size=self._settings['fonts']['desc']['size'])
-		self._timer_font.configure(size=self._settings['fonts']['time']['size'])
-		self._start_font.configure(size=self._settings['fonts']['start']['size'])
-		self._start_button.configure(width=self._settings['fonts']['start']['width'],
-			height=self._settings['fonts']['start']['height'])
+		widgets = {'widget':self,'title':self._title_label,'desc':self._desc_label,
+			'time':self._timer_label,'start':self._start_button}
+		fontwidgets = {'title':self._title_font,'desc':self._desc_font,
+			'time':self._timer_font,'start':self._start_font}
+		for name,widget in widgets.items():
+			helper.configThemeFromDict(widget,self._theme,'base',name)
+		for name,widget in fontwidgets.items():
+			helper.configThemeFromDict(widget,self._theme,'fonts',name)
+		self._update_active_theme()
+
+	def _update_active_theme (self):
+		"""_update_active_theme internal function
+		Updates the colors to active or inactive, based on the state of the timer.
+		"""
+		widgets = {'widget':self,'title':self._title_label,'desc':self._desc_label,
+			'time':self._timer_label,'start':self._start_button}
 		if self.running:
-			self._title_label.configure(fg=self._settings['fonts']['title']['color active'])
-			self._desc_label.configure(fg=self._settings['fonts']['desc']['color active'])
-			self._timer_label.configure(fg=self._settings['fonts']['time']['color active'])
-			self._start_button.configure(fg=self._settings['fonts']['start']['color active'])
+			for name,widget in widgets.items():
+				helper.configThemeFromDict(widget,self._theme,'active',name)
 		else:
-			self._title_label.configure(fg=self._settings['fonts']['title']['color inactive'])
-			self._desc_label.configure(fg=self._settings['fonts']['desc']['color inactive'])
-			self._timer_label.configure(fg=self._settings['fonts']['time']['color inactive'])
-			self._start_button.configure(fg=self._settings['fonts']['start']['color inactive'])
+			for name,widget in widgets.items():
+				helper.configThemeFromDict(widget,self._theme,'base',name)
 
 	def register_toggle_callback (self, callback):
 		"""register_toggle_callback function
@@ -216,7 +215,7 @@ if __name__ == "__main__":
 			for timer in timers:
 				timer.turn_off()
 			root.destroy()
-		def callback (atimer):
+		def togglecallback (atimer):
 			if atimer.running:
 				for timer in timers:
 					if timer != atimer:
@@ -232,14 +231,14 @@ if __name__ == "__main__":
 			{'title':"Other timer",'description':"Some short text"},
 			{'title':"Yet another timer",'description':"Words"}
 		]
-		timer_settings = {}
+		timer_theme = {}
 		frame = tk.Frame(root,width=400,height=200)
 		frame.pack_propagate(False)
 		frame.pack(fill='both',expand=True)
 		for data in timer_datas:
-			timer = TimerButton(frame, timerdata=data, timersettings=timer_settings)
+			timer = TimerButton(frame, timerdata=data, timertheme=timer_theme)
 			timer.pack(fill='x', expand=True)
-			timer.register_toggle_callback(callback)
+			timer.register_toggle_callback(togglecallback)
 			timer.register_labelclick_callback(labelcallback)
 			timers.append(timer)
 		root.protocol('WM_DELETE_WINDOW',on_close)

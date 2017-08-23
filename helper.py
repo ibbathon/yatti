@@ -35,3 +35,15 @@ def dictFromDefaults (custom, defaults):
 
 	# Now we're done with copying everything on this level, so back up to the previous level
 	return custom
+
+def configThemeFromDict (widget, theme, themetype, widgettype):
+	"""configThemeFromDict helper function
+	If themetype exists in the theme dict and widgettype exists in theme[themetype],
+	then configure the widget using the theme.
+	If themetype is fonts, then use ** to expand the theme, as it does not work otherwise.
+	"""
+	if themetype in theme and widgettype in theme[themetype]:
+		if themetype == 'fonts':
+			widget.configure(**theme[themetype][widgettype])
+		else:
+			widget.configure(theme[themetype][widgettype])

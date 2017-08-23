@@ -9,6 +9,7 @@ https://www.tcl.tk/man/tcl8.5/TkCmd/contents.htm
 http://www.tkdocs.com/
 http://effbot.org/tkinterbook/
 https://stackoverflow.com/questions/13141259/expandable-and-contracting-frame-in-tkinter
+http://effbot.org/tkinterbook/tkinter-dialog-windows.htm
 
 Time-tracker APIs:
 https://github.com/toggl/toggl_api_docs
