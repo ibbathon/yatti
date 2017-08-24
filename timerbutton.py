@@ -1,7 +1,7 @@
 """timerbutton module
 Author = Richard D. Fears
 Created = 2017-08-22
-LastModified = 2017-08-23
+LastModified = 2017-08-24
 Description = Provides the TimerButton Tk widget, which contains a timer label, timer description,
 	and button to start/stop the timer.
 """
@@ -52,8 +52,11 @@ class TimerButton (tk.Frame):
 		"""
 		super().__init__(parent,*args,**options)
 
-		# Initialize the callbacks array for when the toggle function is called
+		# Initialize internal variables
+		# The callbacks array for when the toggle function is called
 		self._toggle_callbacks = []
+		# The callbacks array for when any other part of the widget is clicked
+		self._labelclick_callbacks = []
 
 		# If the timerdata or timertheme parameters are given, use them so that we can modify
 		# the values elsewhere in the program. If the parameters were not given, or were not
@@ -195,6 +198,7 @@ class TimerButton (tk.Frame):
 		the start/pause button itself. This allows the main program to "select" the timer,
 		which means it knows when to display the full data.
 		"""
+		self._labelclick_callbacks.append(callback)
 		self._title_label.bind('<Button-1>', lambda e,self=self: callback(self))
 		self._desc_label.bind('<Button-1>', lambda e,self=self: callback(self))
 		self._timer_label.bind('<Button-1>', lambda e,self=self: callback(self))

@@ -6,6 +6,41 @@ Description = Provides some helper functions and constants for use in my other p
 """
 PLAY_CHAR=u'\u23F5'
 PAUSE_CHAR=u'\u23F8'
+LEFT_CHAR=u'\u23F4'
+RIGHT_CHAR=u'\u23F5'
+NUM_WEEKDAYS=7
+WEEKDAYS=(
+	("S","U","Su","Sun","Sunday"),
+	("M","M","Mo","Mon","Monday"),
+	("T","T","Tu","Tue","Tuesday"),
+	("W","W","We","Wed","Wednesday"),
+	("T","H","Th","Thu","Thursday"),
+	("F","F","Fr","Fri","Friday"),
+	("S","S","Sa","Sat","Saturday")
+)
+WEEKDAYS_1_LETTER=tuple([WEEKDAYS[i][0] for i in range(len(WEEKDAYS))])
+WEEKDAYS_1_LETTER_UNIQUE=tuple([WEEKDAYS[i][1] for i in range(len(WEEKDAYS))])
+WEEKDAYS_2_LETTER=tuple([WEEKDAYS[i][2] for i in range(len(WEEKDAYS))])
+WEEKDAYS_3_LETTER=tuple([WEEKDAYS[i][3] for i in range(len(WEEKDAYS))])
+WEEKDAYS_FULL=tuple([WEEKDAYS[i][4] for i in range(len(WEEKDAYS))])
+NUM_MONTHS=12
+MAX_WEEKS_IN_MONTH=5
+MONTHS=(
+	("Jan","January"),
+	("Feb","February"),
+	("Mar","March"),
+	("Apr","April"),
+	("May","May"),
+	("Jun","June"),
+	("Jul","July"),
+	("Aug","August"),
+	("Sep","September"),
+	("Oct","October"),
+	("Nov","November"),
+	("Dec","December")
+)
+MONTHS_3_LETTER=tuple([MONTHS[i][0] for i in range(len(MONTHS))])
+MONTHS_FULL=tuple([MONTHS[i][1] for i in range(len(MONTHS))])
 
 def dictFromDefaults (custom, defaults):
 	"""setDictFromDefaults helper function
