@@ -1,7 +1,7 @@
 """helper module
 Author = Richard D. Fears
 Created = 2017-08-22
-LastModified = 2017-08-22
+LastModified = 2017-08-25
 Description = Provides some helper functions and constants for use in my other programs.
 """
 PLAY_CHAR=u'\u23F5'
@@ -24,7 +24,7 @@ WEEKDAYS_2_LETTER=tuple([WEEKDAYS[i][2] for i in range(len(WEEKDAYS))])
 WEEKDAYS_3_LETTER=tuple([WEEKDAYS[i][3] for i in range(len(WEEKDAYS))])
 WEEKDAYS_FULL=tuple([WEEKDAYS[i][4] for i in range(len(WEEKDAYS))])
 NUM_MONTHS=12
-MAX_WEEKS_IN_MONTH=5
+MAX_WEEKS_IN_MONTH=6
 MONTHS=(
 	("Jan","January"),
 	("Feb","February"),

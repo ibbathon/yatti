@@ -1,7 +1,7 @@
 """calendarwidget module
 Author = Richard D. Fears
 Created = 2017-08-22
-LastModified = 2017-08-23
+LastModified = 2017-08-25
 Description = Provides the Calendar Tk widget. This widget provides a monthly calendar that allows
 	navigation between months/years and selecting a day.
 """
@@ -22,15 +22,22 @@ class Calendar (tk.Frame):
 			'basic':{'fg':'black','bg':'SystemButtonFace',},
 			'year':{},
 			'month':{},
-			'weekday':{},
+			'weekday':{'width':2,},
 			'day':{
 				'activebackground':'light grey',
-				'borderwidth':0,
+				'highlightbackground':'red',
+				'borderwidth':1,
+				'relief':'flat',
+				'overrelief':'raised',
+				'width':2,
+			},
+			'othermonth day':{'fg':'grey',},
+			'nav buttons':{
+				'height':1,
+				'width':1,
 				'relief':'flat',
 				'overrelief':'raised',
 			},
-			'othermonth day':{'fg':'grey',},
-			'nav buttons':{},
 			'today button':{},
 		},
 		'active':{
@@ -43,16 +50,20 @@ class Calendar (tk.Frame):
 		'fonts':{
 			'year':{'size':10,},
 			'month':{'size':10,},
-			'weekday':{'weight':'bold','size':9,},
+			'weekday':{'size':9,'weight':'bold',},
 			'day':{'size':9,},
 			'nav buttons':{'size':10,},
-			'selected day':{},
-			'today button':{},
+			'selected day':{'size':9,'weight':'bold',},
+			'today button':{'size':10,},
 		}
 	}
 
 	def __init__ (self, parent, calendartheme=None, *args, **options):
 		"""Calendar constructor
+		Builds the year, month, and day selectors as well as the Today button. Then populates
+		them appropriately. The optional calendartheme parameter should be a dict of theming
+		preferences. See DEFAULT_THEME for a sample. The leaves of the dict tree are Tk config
+		values.
 		"""
 		super().__init__(parent,*args,**options)
 
@@ -110,7 +121,7 @@ class Calendar (tk.Frame):
 			[None for d in range(helper.NUM_WEEKDAYS)] for w in range(helper.MAX_WEEKS_IN_MONTH)]
 		self._days_monthadd = [
 			[0 for d in range(helper.NUM_WEEKDAYS)] for w in range(helper.MAX_WEEKS_IN_MONTH)]
-		self._days_dayval = [
+		self._days_daynum = [
 			[0 for d in range(helper.NUM_WEEKDAYS)] for w in range(helper.MAX_WEEKS_IN_MONTH)]
 		self._weekdays = [None for d in range(helper.NUM_WEEKDAYS)]
 		for d in range(helper.NUM_WEEKDAYS):
@@ -123,7 +134,7 @@ class Calendar (tk.Frame):
 					command=lambda self=self,w=w,d=d: self._click_day(w,d))
 				self._days[w][d].grid(row=w+2,column=d+1)
 		# Finally, add the Today button
-		self._today_button = tk.Button(self,text="Today",font=self._today_button_font,
+		self._today_button = tk.Button(self,text="Select Today",font=self._today_button_font,
 			command=lambda self=self: self._select_today())
 		self._today_button.pack()
 
@@ -134,15 +145,20 @@ class Calendar (tk.Frame):
 		"""_select_today internal function
 		Changes the day list to the current month/year and selects today's date.
 		"""
+		# Update both viewed and selected dates to the current date
 		currtime = time.localtime()
 		self._viewed_date = [currtime.tm_year,currtime.tm_mon,currtime.tm_mday]
 		self._selected_date = [currtime.tm_year,currtime.tm_mon,currtime.tm_mday]
+		# Update the day list to the current year/month
 		self._change_day_list()
-		self._update_active_theme()
+		# Notify any listeners that we changed the selected day
 		self._call_selectday_callbacks()
 
 	def _change_day_list (self, monthadd=0, yearadd=0):
 		"""_change_day_list internal function
+		Updates the currently-viewed list of days to match the viewed month/year. The optional
+		parameters monthadd and yearadd allow adjusting the month/year before updating the day
+		list.
 		"""
 		# First adjust the viewed year/month
 		self._viewed_date[1] += monthadd
@@ -156,7 +172,8 @@ class Calendar (tk.Frame):
 
 		# Update the month/year labels
 		self._change_year_label.configure(text=str(self._viewed_date[0]))
-		self._change_month_label.configure(text=str(self._viewed_date[1]))
+		self._change_month_label.configure(
+			text=str(helper.MONTHS_3_LETTER[self._viewed_date[1]-1]))
 
 		# Figure out the first day DOW and number of days in the month for the current month/year
 		calinfo = list(calendar.monthrange(self._viewed_date[0],self._viewed_date[1]))
@@ -181,7 +198,7 @@ class Calendar (tk.Frame):
 		while daynum <= prevcalinfo[1]:
 			self._days[w][d].configure(text=str(daynum))
 			self._days_monthadd[w][d] = -1
-			self._days_dayval[w][d] = daynum
+			self._days_daynum[w][d] = daynum
 			daynum += 1
 			d += 1
 			if d >= helper.NUM_WEEKDAYS:
@@ -190,10 +207,9 @@ class Calendar (tk.Frame):
 		# Now do all the days from the current month
 		daynum = 1
 		while daynum <= calinfo[1]:
-			print(w,d)
 			self._days[w][d].configure(text=str(daynum))
 			self._days_monthadd[w][d] = 0
-			self._days_dayval[w][d] = daynum
+			self._days_daynum[w][d] = daynum
 			daynum += 1
 			d += 1
 			if d >= helper.NUM_WEEKDAYS:
@@ -204,7 +220,7 @@ class Calendar (tk.Frame):
 		while w < helper.MAX_WEEKS_IN_MONTH:
 			self._days[w][d].configure(text=str(daynum))
 			self._days_monthadd[w][d] = 1
-			self._days_dayval[w][d] = daynum
+			self._days_daynum[w][d] = daynum
 			daynum += 1
 			d += 1
 			if d >= helper.NUM_WEEKDAYS:
@@ -218,7 +234,24 @@ class Calendar (tk.Frame):
 		Function called by the day buttons when they are clicked. week is the row of the button
 		and weekday is the column of the button.
 		"""
-		pass
+		daynum = self._days_daynum[week][weekday]
+		monthadd = self._days_monthadd[week][weekday]
+		# Jump to the currently-viewed month/year
+		self._selected_date = self._viewed_date[:]
+		# If we clicked on a previous month or next month day, then add the modifier
+		self._selected_date[1] += monthadd
+		if self._selected_date[1] > 12:
+			self._selected_date[0] += 1
+			self._selected_date[1] = 1
+		elif self._selected_date[1] < 1:
+			self._selected_date[0] -= 1
+			self._selected_date[1] = 12
+		# Select the specific date
+		self._selected_date[2] = daynum
+		# Move the current day list to match selected day (and update the theme)
+		self._change_day_list(monthadd=monthadd)
+		# Notify any listeners that we've clicked the day
+		self._call_selectday_callbacks()
 
 	def update_theme (self):
 		"""update_theme function
@@ -268,18 +301,18 @@ class Calendar (tk.Frame):
 				helper.configThemeFromDict(self._days[w][d],self._theme,'base','day')
 				if self._days_monthadd[w][d] != 0:
 					helper.configThemeFromDict(self._days[w][d],self._theme,'base','othermonth day')
-				elif self._is_selected_day(self._days_dayval[w][d]):
+				elif self._is_selected_day(self._days_daynum[w][d]):
 					self._days[w][d].configure(font=self._selected_day_font)
 					helper.configThemeFromDict(self._days[w][d],self._theme,'active','day')
 
-	def _is_selected_day (self, dayval):
+	def _is_selected_day (self, daynum):
 		"""_is_selected_day internal function
-		Checks if the given dayval, along with the viewed month/year, matches the selected date.
+		Checks if the given daynum, along with the viewed month/year, matches the selected date.
 		If it does, return True. Otherwise, return False.
 		"""
 		if self._viewed_date[0] == self._selected_date[0] \
 			and self._viewed_date[1] == self._selected_date[1] \
-			and self._selected_date[2] == dayval:
+			and self._selected_date[2] == daynum:
 			return True
 		return False
 
@@ -299,8 +332,11 @@ class Calendar (tk.Frame):
 if __name__ == "__main__":
 	import traceback
 	try:
+		def selectday_callback (widget, selected_date):
+			print(selected_date)
 		root = tk.Tk()
 		cal = Calendar(root)
+		cal.register_selectday_callback(selectday_callback)
 		cal.pack()
 		root.mainloop()
 	except Exception as e:
