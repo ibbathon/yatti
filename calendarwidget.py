@@ -1,22 +1,27 @@
 """calendarwidget module
 Author = Richard D. Fears
 Created = 2017-08-22
-LastModified = 2017-08-25
+LastModified = 2017-08-31
 Description = Provides the Calendar Tk widget. This widget provides a monthly calendar that allows
 	navigation between months/years and selecting a day.
 """
+# Tk imports
 import tkinter as tk
 import tkinter.font as tkfont
+# Standard Python library imports
 import calendar, time
+# My code imports
 import helper
+from versionexception import VersionException
 
 class Calendar (tk.Frame):
 	"""Calendar class
 	Displays a frame with a year, month, and days in the month. Buttons are provided to quickly
 	change the month and year. Days are labels, but can be clicked to select them.
 	"""
-
+	OLDEST_CONVERTIBLE_THEME_VERSION = [1,0,0]
 	DEFAULT_THEME = {
+		'version':[1,0,0],
 		'base':{
 			'widget':{'bg':'SystemButtonFace',},
 			'basic':{'fg':'black','bg':'SystemButtonFace',},
@@ -25,12 +30,12 @@ class Calendar (tk.Frame):
 			'weekday':{'width':2,},
 			'day':{
 				'activebackground':'light grey',
-				'highlightbackground':'red',
 				'borderwidth':1,
 				'relief':'flat',
 				'overrelief':'raised',
 				'width':2,
 			},
+			'current day':{'bg':'light green',},
 			'othermonth day':{'fg':'grey',},
 			'nav buttons':{
 				'height':1,
@@ -58,6 +63,32 @@ class Calendar (tk.Frame):
 		}
 	}
 
+	def _theme_version_update (self, oldtheme):
+		"""_theme_version_update internal function
+		Updates the old theme to the new format, based on relative versions.
+		"""
+		# Check for versions which are incompatible with list-of-numbers versions
+		try:
+			oldtheme['version'] < [0]
+		except:
+			raise VersionException(VersionException.BAD_TYPE,oldtheme['version'])
+
+		# If the data version is later than the program version, we will not know how to convert
+		if oldtheme['version'] > Calendar.DEFAULT_THEME['version']:
+			raise VersionException(VersionException.TOO_NEW,
+				oldtheme['version'],Calendar.DEFAULT_THEME['version'])
+
+		# If the old version is too old, we will not know how to convert
+		if oldtheme['version'] < Calendar.OLDEST_CONVERTIBLE_THEME_VERSION:
+			raise VersionException(VersionException.TOO_OLD,
+				oldtheme['version'],Calendar.DEFAULT_THEME['version'])
+
+		# Finally, convert incrementally through all the versions
+		# Below is some sample code to copy:
+		#if oldtheme['version'] < [1,1]:
+		#	oldtheme['somevariable'] = oldtheme['oldvariable']
+		#	oldtheme['version'] = [1,1]
+
 	def __init__ (self, parent, calendartheme=None, *args, **options):
 		"""Calendar constructor
 		Builds the year, month, and day selectors as well as the Today button. Then populates
@@ -76,9 +107,9 @@ class Calendar (tk.Frame):
 		# Selected date is the last day the user clicked on
 		self._selected_date = [currtime.tm_year,currtime.tm_mon,currtime.tm_mday]
 
-		# If the calendartheme parameter is given, use it so we can modify the values elsewhere
-		# in the program. Otherwise, fill it in from defaults.
-		self._theme = helper.dictFromDefaults(calendartheme,self.DEFAULT_THEME)
+		# Update the calendartheme parameters (or set to defaults)
+		self._theme = helper.dictVersionUpdate(calendartheme,self._theme_version_update,
+			self.DEFAULT_THEME)
 
 		# Create the fonts; no need to set anything, as they will be configured in update_theme
 		self._year_font = tkfont.Font()
@@ -135,14 +166,14 @@ class Calendar (tk.Frame):
 				self._days[w][d].grid(row=w+2,column=d+1)
 		# Finally, add the Today button
 		self._today_button = tk.Button(self,text="Select Today",font=self._today_button_font,
-			command=lambda self=self: self._select_today())
+			command=lambda self=self: self.select_today())
 		self._today_button.pack()
 
 		self.update_theme()
 		self._change_day_list()
 
-	def _select_today (self):
-		"""_select_today internal function
+	def select_today (self):
+		"""select_today function
 		Changes the day list to the current month/year and selects today's date.
 		"""
 		# Update both viewed and selected dates to the current date
@@ -299,6 +330,10 @@ class Calendar (tk.Frame):
 				helper.configThemeFromDict(self._days[w][d],self._theme,'base','basic')
 				self._days[w][d].configure(font=self._day_font)
 				helper.configThemeFromDict(self._days[w][d],self._theme,'base','day')
+				today = time.localtime()
+				if self._viewed_date[0] == today.tm_year and self._viewed_date[1] == today.tm_mon \
+					and self._days_monthadd[w][d] == 0 and self._days_daynum[w][d] == today.tm_mday:
+					helper.configThemeFromDict(self._days[w][d],self._theme,'base','current day')
 				if self._days_monthadd[w][d] != 0:
 					helper.configThemeFromDict(self._days[w][d],self._theme,'base','othermonth day')
 				elif self._is_selected_day(self._days_daynum[w][d]):

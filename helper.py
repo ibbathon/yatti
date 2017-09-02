@@ -1,7 +1,7 @@
 """helper module
 Author = Richard D. Fears
 Created = 2017-08-22
-LastModified = 2017-08-25
+LastModified = 2017-08-31
 Description = Provides some helper functions and constants for use in my other programs.
 """
 PLAY_CHAR=u'\u23F5'
@@ -82,3 +82,21 @@ def configThemeFromDict (widget, theme, themetype, widgettype):
 			widget.configure(**theme[themetype][widgettype])
 		else:
 			widget.configure(theme[themetype][widgettype])
+
+def dictVersionUpdate (olddict, dictversionupdate, defaultdict):
+	"""dictVersionUpdate helper function
+	A wrapper which handles calling the version update function at the appropriate time.
+	"""
+	# Make sure the dict is a dict
+	if type(olddict) != type({}):
+		olddict = {}
+	# If the version attribute already exists in the olddict, then try to update to the new version
+	if 'version' in olddict:
+		dictversionupdate(olddict)
+	# Otherwise, just fill in the version
+	else:
+		olddict['version'] = defaultdict['version'][:]
+	# Populate the dict from the defaults
+	olddict = dictFromDefaults(olddict,defaultdict)
+	# And return the updated dict
+	return olddict
