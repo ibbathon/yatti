@@ -1,7 +1,7 @@
 """timerbutton module
 Author = Richard D. Fears
 Created = 2017-08-22
-LastModified = 2017-08-31
+LastModified = 2017-09-06
 Description = Provides the TimerButton Tk widget, which contains a timer label, timer description,
 	and button to start/stop the timer.
 """
@@ -36,13 +36,17 @@ class TimerButton (tk.Frame):
 			'delete short':True,
 			'max adjacency distance':2.0,
 			'max short distance':2.0,
-		}
+		},
+		'description truncation':{
+			'pad width':10,
+			'suffix char':'\N{HORIZONTAL ELLIPSIS}',
+		},
 	}
 	OLDEST_CONVERTIBLE_THEME_VERSION = [1,0,0]
 	DEFAULT_THEME = {
 		'version':[1,0,0],
 		'base':{
-			'widget':{'bd':2,'relief':'raised','width':200,},
+			'widget':{'bd':2,'relief':'raised','width':500,},
 			'title':{'fg':'black',},
 			'desc':{'fg':'black',},
 			'time':{'fg':'black',},
@@ -170,10 +174,10 @@ class TimerButton (tk.Frame):
 		tk.Grid.columnconfigure(self,1,weight=1)
 		self._title_font = tkfont.Font()
 		self._title_label = tk.Label(self,font=self._title_font,anchor='w')
-		self._title_label.grid(column=1,row=1,sticky='we')
+		self._title_label.grid(column=1,row=1,sticky='ew')
 		self._desc_font = tkfont.Font()
 		self._desc_label = tk.Label(self,font=self._desc_font,anchor='w')
-		self._desc_label.grid(column=1,row=2,sticky='we')
+		self._desc_label.grid(column=1,row=2,sticky='ew')
 
 		# Build the timer label
 		self._running = tk.BooleanVar(False)
@@ -335,11 +339,55 @@ class TimerButton (tk.Frame):
 			'time':self._timer_label,'start':self._start_button}
 		fontwidgets = {'title':self._title_font,'desc':self._desc_font,
 			'time':self._timer_font,'start':self._start_font}
+
+		# Before updating any of the sub-widgets, turn on grid-propagation so they will expand
+		# the main frame
+		self.grid_propagate(True)
+		# Update the theme for each of the sub-widgets and fonts
 		for name,widget in widgets.items():
 			helper.configThemeFromDict(widget,self._theme,'base',name)
 		for name,widget in fontwidgets.items():
 			helper.configThemeFromDict(widget,self._theme,'fonts',name)
+		# Handle any active theme updates
 		self._update_active_theme()
+
+		# Finally, turn off grid-propagation and force the width to be a certain value.
+		# This way, the height will automatically expand appropriately, but the width will
+		# remain a certain size for future parent widgets.
+		# Make sure to grab the desired height first.
+		self.update()
+		targetheight = self.winfo_height()
+		targetwidth = self._theme['base']['widget']['width']
+		self.grid_propagate(False)
+		if self.winfo_width() == 1:
+			self.after(20,lambda self=self:self.update_theme())
+			self.configure(height=50,width=50)
+		else:
+			self.configure(height=targetheight,width=targetwidth)
+			self.update()
+			self._truncate_description()
+
+	def _truncate_description (self):
+		"""_truncate_description internal function
+		Checks if the description widget should be truncated. If so, it grabs the maximum
+		substring that fits within the label and tacks an ellipsis on the end."""
+		# First check if the text already fits in the label
+		padwidth = self._settings['description truncation']['pad width']
+		labelwidth = self._desc_label.winfo_width()
+		desctext = self._data['description']
+		textwidth = self._desc_font.measure(desctext)
+		if textwidth+padwidth <= labelwidth:
+			# If it does, go ahead and set the text, then exit
+			self._desc_label.configure(text=desctext)
+			return
+		# Otherwise, decrementally check substrings of the label text until it fits
+		suffixchar = self._settings['description truncation']['suffix char']
+		suffixcharwidth = self._desc_font.measure(suffixchar)
+		for i in range(len(desctext),0,-1):
+			textwidth = self._desc_font.measure(desctext[:i])
+			if textwidth+padwidth+suffixcharwidth <= labelwidth:
+				self._desc_label.configure(text=desctext[:i]+suffixchar)
+				return
 
 	def _update_active_theme (self):
 		"""_update_active_theme internal function
@@ -410,11 +458,10 @@ if __name__ == "__main__":
 			{'title':"Yet another timer",'description':"Words"}
 		]
 		frame = tk.Frame(root,width=400,height=200)
-		frame.pack_propagate(False)
 		frame.pack(fill='both',expand=True)
 		for data in timer_datas:
 			timer = TimerButton(frame, timerdata=data)
-			timer.pack(fill='x', expand=True)
+			timer.pack()
 			timer.register_toggle_callback(togglecallback)
 			timer.register_labelclick_callback(labelcallback)
 			timers.append(timer)
