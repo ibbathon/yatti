@@ -39,6 +39,7 @@ class YattiMain:
 	OLDEST_CONVERTIBLE_SETTINGS_VERSION = [1,0,0]
 	DEFAULT_SETTINGS = {
 		'version':[1,0,0],
+		'timerbuttons':{},
 		'root width':1200,
 		'root height':800,
 		'theme file':'default-theme.json',
@@ -180,6 +181,23 @@ class YattiMain:
 		#	olddata['somevariable'] = olddata['oldvariable']
 		#	olddata['version'] = [1,1]
 
+	def __init__ (self):
+		"""YattiMain constructor
+		Reads in the default theme, data, settings, and password files. If any of them do not exist
+		yet, it creates base versions.
+		"""
+		# First read in the settings file
+		self._settingsfilename = "settings.json"
+		self._settings = self._load_file_or_defaults("settings",self._settingsfilename,
+			self._settings_version_update,self.DEFAULT_SETTINGS)
+		# The settings file will contain the rest of the filenames
+		self._theme = self._load_file_or_defaults("theme",self._settings['theme file'],
+			self._theme_version_update,self.DEFAULT_THEME)
+		self._data = self._load_file_or_defaults("data",self._settings['data file'],
+			self._data_version_update,self.DEFAULT_DATA)
+		self._passwords = self._load_file_or_defaults("passwords",self._settings['passwords file'],
+			self._passwords_version_update,self.DEFAULT_PASSWORDS,self._decrypt_password_file)
+
 	def _decrypt_password_file (self, filetext):
 		"""_decrypt_password_file internal function
 		Takes raw text from an encrypted file and converts it to decrypted JSON text string.
@@ -215,23 +233,6 @@ class YattiMain:
 		thedict = helper.dictVersionUpdate(thedict,updatefunc,defaults)
 		return thedict
 
-	def __init__ (self):
-		"""YattiMain constructor
-		Reads in the default theme, data, settings, and password files. If any of them do not exist
-		yet, it creates base versions.
-		"""
-		# First read in the settings file
-		self._settingsfilename = "settings.json"
-		self._settings = self._load_file_or_defaults("settings",self._settingsfilename,
-			self._settings_version_update,self.DEFAULT_SETTINGS)
-		# The settings file will contain the rest of the filenames
-		self._theme = self._load_file_or_defaults("theme",self._settings['theme file'],
-			self._theme_version_update,self.DEFAULT_THEME)
-		self._data = self._load_file_or_defaults("data",self._settings['data file'],
-			self._data_version_update,self.DEFAULT_DATA)
-		self._passwords = self._load_file_or_defaults("passwords",self._settings['passwords file'],
-			self._passwords_version_update,self.DEFAULT_PASSWORDS,self._decrypt_password_file)
-
 	def _canvas_reconfigure (self):
 		"""_canvas_reconfigure callback function
 		Reconfigures the canvas's scrollregion and width when its view is reconfigured.
@@ -240,7 +241,7 @@ class YattiMain:
 		if not self._canvas.winfo_viewable():
 			self._canvas.after(20,self._canvas_reconfigure)
 			return
-		self._canvas.configure(
+		self._canvas.config(
 			scrollregion=self._canvas.bbox('all'),
 			width=self._timerframe.winfo_width()
 		)
@@ -258,46 +259,100 @@ class YattiMain:
 		xpos = (screenwidth/2)-(rootwidth/2)
 		ypos = (screenheight/2)-(rootheight/2)
 		self._root.geometry('%dx%d+%d+%d'%(rootwidth,rootheight,xpos,ypos))
-		# Column 3 (right pane) and row 2 (timer list) should expand when window resized
-		self._root.grid_columnconfigure(3,weight=1)
-		self._root.grid_rowconfigure(2,weight=1)
+		# Right pane column and timer list row should expand when window resized
+		self._root.grid_columnconfigure(2,weight=1)
+		self._root.grid_rowconfigure(1,weight=1)
 		self._timers = []
+		### Menu ###
+		menubar = tk.Menu(self._root)
+		self._root.config(menu=menubar)
+		# File menu
+		filemenu = tk.Menu(menubar, tearoff=0)
+		menubar.add_cascade(label="File",underline=0,menu=filemenu)
+		filemenu.add_command(label="Save",underline=0,command=self._write_all_files)
+		# Timer menu
+		timermenu = tk.Menu(menubar, tearoff=0)
+		menubar.add_cascade(label="Timers",underline=0,menu=timermenu)
+		timermenu.add_command(label="Add New Timer",underline=0,command=self._add_timer)
 		### Left pane ###
-		# Calendar
-		self._cal = Calendar(self._root,self._theme['calendar'])
-		self._cal.grid(column=1,row=1)
-		# Add buttons
-		buttonframe = tk.Frame(self._root)
-		buttonframe.grid(column=2,row=1)
-		self._button_font = tkfont.Font()
-		self._add_button = tk.Button(buttonframe,font=self._button_font,text="Add Timer")
-		self._add_button.pack()
-		self._quick_add_button = tk.Button(buttonframe,font=self._button_font,
-			text="Quick-Add Timer")
-		self._quick_add_button.pack()
 		# Timer button frame
 		timerframeouter = tk.Frame(self._root)
-		timerframeouter.grid(column=1,row=2,columnspan=2,sticky='ns')
+		timerframeouter.grid(column=1,row=1,sticky='ns')
 		self._canvas = tk.Canvas(timerframeouter)
 		self._timerframe = tk.Frame(self._canvas)
 		self._timerframe.pack()
 		timerscrollbar = tk.Scrollbar(timerframeouter,orient='vertical',command=self._canvas.yview)
-		self._canvas.configure(yscrollcommand=timerscrollbar.set)
+		self._canvas.config(yscrollcommand=timerscrollbar.set)
 		timerscrollbar.pack(side='right',fill='y',expand=True)
 		self._canvas.pack(side='left',fill='y',expand=True)
 		self._canvas.create_window((0,0),window=self._timerframe,anchor='nw')
 		self._timerframe.bind('<Configure>',lambda e,self=self: self._canvas_reconfigure)
+		# Add quick-add button
+		self._button_font = tkfont.Font()
+		self._quick_add_button = tk.Button(self._root,font=self._button_font,
+			text="Quick-Add Timer",command=self._add_timer)
+		self._quick_add_button.grid(column=1,row=2)
 
 		### Right pane ###
 		templabel = tk.Label(self._root,text="Blah")
-		templabel.grid(row=1,column=3,rowspan=2)
-		#templabel.bind('<Button-1>', lambda e,canvas=self._canvas: canvas.yview_moveto(1))
+		templabel.grid(row=1,column=2,rowspan=2)
+		#templabel.bind('<Button-1>', lambda e,self=self: self._canvas_reconfigure())
 
 		### Adding timer buttons and reconfiguring ###
-		self._timerframe.after(5,self.debugadd)
+		self._load_timers_from_json()
 		self.update_theme()
 
 		self._root.mainloop()
+
+	def _write_all_files (self):
+		"""_write_all_files internal function
+		Writes the settings, theme, data, and passwords dictionaries to their respective files.
+		"""
+		self._write_file("settings",self._settings,self._settingsfilename)
+		self._write_file("theme",self._theme,self._settings['theme file'])
+		self._write_file("data",self._data,self._settings['data file'])
+		self._write_file("passwords",self._passwords,self._settings['passwords file'],
+			self._decrypt_password_file)
+
+	def _write_file (self, dictname, sourcedict, filename, wrapperfunc = None):
+		"""_write_file internal function
+		Writes the given sourcedict as JSON to the given filename, optionally running wrapperfunc
+		on the JSON first.
+		"""
+		# Try to write out the JSON
+		try:
+			with open(filename,'w') as fileobj:
+				if wrapperfunc == None:
+					json.dump(sourcedict,fileobj)
+				else:
+					fileobj.write(wrapperfunc(json.dumps(sourcedict)))
+			return True
+		# If we can't, notify the user
+		except:
+			print(dictname+" JSON could not be written to "+filename+".",file=sys.stderr)
+			traceback.print_exc()
+			return False
+
+	def _load_timers_from_json (self):
+		"""_load_timers_from_json internal function
+		Adds all the timers found in the JSON file that was read in at the start of the program.
+		"""
+		for data in self._data['timerdata']:
+			self._add_timer(data)
+
+	def _add_timer (self, timerdata=None):
+		"""_add_timer internal function
+		Adds a timer button to the list. timerdata can be specified if loading an existing timer.
+		"""
+		if timerdata == None:
+			self._data['timerdata'].append({})
+			timerdata = self._data['timerdata'][-1]
+		self._timers.append(TimerButton(self._timerframe,timerdata,self._settings['timerbuttons'],
+			self._theme['timerbuttons']))
+		self._timers[-1].pack()
+		self._timers[-1].update_theme()
+		self._canvas_reconfigure()
+		self._canvas.yview_moveto(1)
 
 	def update_theme (self):
 		"""update_theme function
@@ -305,16 +360,14 @@ class YattiMain:
 		the theme.
 		"""
 		widgets = (
-			(self._add_button,'basic'),
 			(self._quick_add_button,'basic'),
 			(self._root,'widget'),
-			(self._add_button,'buttons'),
 			(self._quick_add_button,'buttons'),
 		)
 		fontwidgets = (
 			(self._button_font,'buttons'),
 		)
-		subwidgets = [self._cal]+self._timers
+		subwidgets = []+self._timers
 
 		for widget,name in widgets:
 			helper.configThemeFromDict(widget,self._theme,'base',name)
@@ -322,19 +375,6 @@ class YattiMain:
 			helper.configThemeFromDict(widget,self._theme,'fonts',name)
 		for widget in subwidgets:
 			widget.update_theme()
-
-
-	def debugadd (self):
-		if not self._timerframe.winfo_viewable():
-			self._timerframe.after(5,self.debugadd)
-			return
-		for i in range(10):
-			self._timers.append(TimerButton(self._timerframe,
-				timertheme=self._theme['timerbuttons']))
-		for i in range(10):
-			self._timers[i].pack()
-		self._timerframe.update()
-		self._canvas_reconfigure()
 
 
 if __name__ == "__main__":

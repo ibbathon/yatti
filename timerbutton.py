@@ -23,6 +23,8 @@ class TimerButton (tk.Frame):
 	OLDEST_CONVERTIBLE_DATA_VERSION = [1,0,0]
 	DEFAULT_DATA = {
 		'version':[1,0,0],
+		# intervals is a list of lists. Each of the sublists has 4 elements:
+		# start time (Unixtime), end time (Unixtime), exported (Boolean), description (String)
 		'intervals':[],
 		'title':"TIMER",
 		'description':"Default timer"
@@ -277,12 +279,12 @@ class TimerButton (tk.Frame):
 			return
 		# If there is no previous interval, skip all the later logic and just add the new interval
 		if len(self._data['intervals']) == 0:
-			self._data['intervals'].append((self._curr_start_time,end_time))
+			self._data['intervals'].append([self._curr_start_time,end_time,False,""])
 			return
 		# Next, check if the start times match exactly; if they do, skip the later logic
 		# and just replace the latest interval
 		if self._data['intervals'][-1][0] == self._curr_start_time:
-			self._data['intervals'][-1] = (self._curr_start_time,end_time)
+			self._data['intervals'][-1][1] = end_time
 			return
 		# Now on to the main meat of this function
 
@@ -308,7 +310,8 @@ class TimerButton (tk.Frame):
 		# By definition, the overlapping and adjacent conditions cannot happen at the same time,
 		# so if there is an overlap replacement, do it now and exit
 		if replace:
-			self._data['intervals'][-1] = (new_start_time,new_end_time)
+			self._data['intervals'][-1][0] = new_start_time
+			self._data['intervals'][-1][1] = new_end_time
 			return
 
 		# Check for adjacent intervals
@@ -318,11 +321,12 @@ class TimerButton (tk.Frame):
 			replace = True
 			new_start_time = old_start_time
 		if replace:
-			self._data['intervals'][-1] = (new_start_time,new_end_time)
+			self._data['intervals'][-1][0] = new_start_time
+			self._data['intervals'][-1][1] = new_end_time
 			return
 
 		# Finally, we've passed all the logic for joining intervals, we should instead create new
-		self._data['intervals'].append((new_start_time,new_end_time))
+		self._data['intervals'].append([new_start_time,new_end_time,False,""])
 
 	def update_data (self):
 		"""update_data function
@@ -452,7 +456,7 @@ if __name__ == "__main__":
 		root = tk.Tk()
 		timers = []
 		timer_datas = [
-			{'intervals':[(0,3500)],'title':"COE-4840",
+			{'intervals':[[0,3500,False,"Blah"]],'title':"COE-4840",
 				'description':"A really long, verbose, complicated pile of junk"},
 			{'title':"Other timer",'description':"Some short text"},
 			{'title':"Yet another timer",'description':"Words"}
