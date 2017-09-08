@@ -337,20 +337,30 @@ class TimerButton (tk.Frame):
 
 	def update_theme (self):
 		"""update_theme function
-		Updates the fonts from the theme attribute. Used when the user changes the theme.
+		Updates the fonts/colors/styles from the theme attribute. Used when the user changes
+		the theme.
 		"""
-		widgets = {'widget':self,'title':self._title_label,'desc':self._desc_label,
-			'time':self._timer_label,'start':self._start_button}
-		fontwidgets = {'title':self._title_font,'desc':self._desc_font,
-			'time':self._timer_font,'start':self._start_font}
+		widgets = (
+			(self,'widget'),
+			(self._title_label,'title'),
+			(self._desc_label,'desc'),
+			(self._timer_label,'time'),
+			(self._start_button,'start'),
+		)
+		fontwidgets = (
+			(self._title_font,'title'),
+			(self._desc_font,'desc'),
+			(self._timer_font,'time'),
+			(self._start_font,'start'),
+		)
 
 		# Before updating any of the sub-widgets, turn on grid-propagation so they will expand
 		# the main frame
 		self.grid_propagate(True)
 		# Update the theme for each of the sub-widgets and fonts
-		for name,widget in widgets.items():
+		for widget,name in widgets:
 			helper.configThemeFromDict(widget,self._theme,'base',name)
-		for name,widget in fontwidgets.items():
+		for widget,name in fontwidgets:
 			helper.configThemeFromDict(widget,self._theme,'fonts',name)
 		# Handle any active theme updates
 		self._update_active_theme()
@@ -397,13 +407,18 @@ class TimerButton (tk.Frame):
 		"""_update_active_theme internal function
 		Updates the colors to active or inactive, based on the state of the timer.
 		"""
-		widgets = {'widget':self,'title':self._title_label,'desc':self._desc_label,
-			'time':self._timer_label,'start':self._start_button}
+		widgets = (
+			(self,'widget'),
+			(self._title_label,'title'),
+			(self._desc_label,'desc'),
+			(self._timer_label,'time'),
+			(self._start_button,'start'),
+		)
 		if self.running:
-			for name,widget in widgets.items():
+			for widget,name in widgets:
 				helper.configThemeFromDict(widget,self._theme,'active',name)
 		else:
-			for name,widget in widgets.items():
+			for widget,name in widgets:
 				helper.configThemeFromDict(widget,self._theme,'base',name)
 
 	def register_toggle_callback (self, callback):
