@@ -27,7 +27,8 @@ class TimerButton (tk.Frame):
 		# start time (Unixtime), end time (Unixtime), exported (Boolean), description (String)
 		'intervals':[],
 		'title':"TIMER",
-		'description':"Default timer"
+		'description':"Default timer",
+		'source system':"YATTi",
 	}
 	OLDEST_CONVERTIBLE_SETTINGS_VERSION = [1,0,0]
 	DEFAULT_SETTINGS = {
