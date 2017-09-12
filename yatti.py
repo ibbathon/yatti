@@ -10,10 +10,10 @@ Description = Main file of the YATTi program. Builds and displays all of the nec
 import tkinter as tk
 import tkinter.font as tkfont
 # Standard Python library imports
-import sys, json, base64, time
+import os, sys, json, base64, time
+from appdirs import AppDirs
 # My code imports
 import helper
-from calendarwidget import Calendar
 from timerbutton import TimerButton
 
 class YattiMain:
@@ -42,6 +42,7 @@ class YattiMain:
 		'timerbuttons':{},
 		'root width':1200,
 		'root height':800,
+		'pause other timers':True,
 		'theme file':'default-theme.json',
 		'data file':'timerdata.json',
 		'passwords file':'passwords.bin',
@@ -186,16 +187,24 @@ class YattiMain:
 		Reads in the default theme, data, settings, and password files. If any of them do not exist
 		yet, it creates base versions.
 		"""
+		# Get the preferred settings location
+		self._dirs = AppDirs(appname="YATTi",appauthor="GrayShadowSoftware")
+		configprefix = self._dirs.user_config_dir
+		dataprefix = self._dirs.user_data_dir
 		# First read in the settings file
 		self._settingsfilename = "settings.json"
-		self._settings = self._load_file_or_defaults("settings",self._settingsfilename,
+		self._settings = self._load_file_or_defaults("settings",
+			configprefix+os.sep+self._settingsfilename,
 			self._settings_version_update,self.DEFAULT_SETTINGS)
 		# The settings file will contain the rest of the filenames
-		self._theme = self._load_file_or_defaults("theme",self._settings['theme file'],
+		self._theme = self._load_file_or_defaults("theme",
+			configprefix+os.sep+self._settings['theme file'],
 			self._theme_version_update,self.DEFAULT_THEME)
-		self._data = self._load_file_or_defaults("data",self._settings['data file'],
+		self._data = self._load_file_or_defaults("data",
+			dataprefix+os.sep+self._settings['data file'],
 			self._data_version_update,self.DEFAULT_DATA)
-		self._passwords = self._load_file_or_defaults("passwords",self._settings['passwords file'],
+		self._passwords = self._load_file_or_defaults("passwords",
+			configprefix+os.sep+self._settings['passwords file'],
 			self._passwords_version_update,self.DEFAULT_PASSWORDS,self._decrypt_password_file)
 
 	def _decrypt_password_file (self, filetext):
@@ -308,20 +317,26 @@ class YattiMain:
 		"""_write_all_files internal function
 		Writes the settings, theme, data, and passwords dictionaries to their respective files.
 		"""
-		self._write_file("settings",self._settings,self._settingsfilename)
-		self._write_file("theme",self._theme,self._settings['theme file'])
-		self._write_file("data",self._data,self._settings['data file'])
-		self._write_file("passwords",self._passwords,self._settings['passwords file'],
-			self._decrypt_password_file)
+		self._write_file("settings",self._settings,self._dirs.user_config_dir,
+			self._settingsfilename)
+		self._write_file("theme",self._theme,self._dirs.user_config_dir,
+			self._settings['theme file'])
+		self._write_file("data",self._data,self._dirs.user_data_dir,
+			self._settings['data file'])
+		self._write_file("passwords",self._passwords,self._dirs.user_config_dir,
+			self._settings['passwords file'],self._encrypt_password_file)
 
-	def _write_file (self, dictname, sourcedict, filename, wrapperfunc = None):
+	def _write_file (self, dictname, sourcedict, filedir, filename, wrapperfunc = None):
 		"""_write_file internal function
 		Writes the given sourcedict as JSON to the given filename, optionally running wrapperfunc
 		on the JSON first.
 		"""
+		# Create the directory
+		if not os.path.exists(filedir):
+			os.makedirs(filedir)
 		# Try to write out the JSON
 		try:
-			with open(filename,'w') as fileobj:
+			with open(filedir+os.sep+filename,'w') as fileobj:
 				if wrapperfunc == None:
 					json.dump(sourcedict,fileobj)
 				else:
@@ -329,7 +344,8 @@ class YattiMain:
 			return True
 		# If we can't, notify the user
 		except:
-			print(dictname+" JSON could not be written to "+filename+".",file=sys.stderr)
+			print(dictname+" JSON could not be written to "+(filedir+os.sep+filename)+".",
+				file=sys.stderr)
 			traceback.print_exc()
 			return False
 
@@ -351,8 +367,20 @@ class YattiMain:
 			self._theme['timerbuttons']))
 		self._timers[-1].pack()
 		self._timers[-1].update_theme()
+		self._timers[-1].register_toggle_callback(self._timer_toggled)
 		self._canvas_reconfigure()
 		self._canvas.yview_moveto(1)
+
+	def _timer_toggled (self, thetimer):
+		"""_timer_toggled callback function
+		The function which is called for each timer when said timer is toggled.
+		"""
+		# If we want to pause other timers when this one is started, do so
+		print(self._settings['pause other timers'],thetimer.running)
+		if self._settings['pause other timers'] and thetimer.running:
+			for timer in self._timers:
+				if timer != thetimer:
+					timer.turn_off()
 
 	def update_theme (self):
 		"""update_theme function
