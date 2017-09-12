@@ -2,7 +2,7 @@
 Author = Richard D. Fears
 Created = 2017-09-10
 LastModified = 2017-09-10
-Description = Provides the TimerDataEditor Tk widget. This widget provides a grid of descriptions
+Description = Provides the DataEditor Tk widget. This widget provides a grid of descriptions
 	and labels for editing a single-level dictionary.
 """
 # Tk imports
