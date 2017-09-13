@@ -1,7 +1,7 @@
 """dataeditor module
 Author = Richard D. Fears
 Created = 2017-09-10
-LastModified = 2017-09-10
+LastModified = 2017-09-13
 Description = Provides the DataEditor Tk widget. This widget provides a grid of descriptions
 	and labels for editing a single-level dictionary.
 """
@@ -9,7 +9,7 @@ Description = Provides the DataEditor Tk widget. This widget provides a grid of 
 import tkinter as tk
 import tkinter.font as tkfont
 # Standard Python library imports
-
+import time
 # My code imports
 import helper
 from versionexception import VersionException
@@ -25,13 +25,17 @@ class DataEditor (tk.Frame):
 			'widget':{'bg':'SystemButtonFace',},
 			'basic':{'fg':'black','bg':'SystemButtonFace',},
 			'labels':{},
-			'textboxes':{},
+			'entries':{},
 			'checkboxes':{},
+			'buttons':{},
+			'save button':{},
 		},
 		'active':{},
 		'fonts':{
-			'labels':{'size':12},
-			'textboxes':{'size':12},
+			'labels':{'size':10},
+			'entries':{'size':10},
+			'buttons':{'size':8},
+			'save button':{'size':12},
 		},
 	}
 
@@ -46,14 +50,14 @@ class DataEditor (tk.Frame):
 			raise VersionException(VersionException.BAD_TYPE,oldtheme['version'])
 
 		# If the data version is later than the program version, we will not know how to convert
-		if oldtheme['version'] > Calendar.DEFAULT_THEME['version']:
+		if oldtheme['version'] > DataEditor.DEFAULT_THEME['version']:
 			raise VersionException(VersionException.TOO_NEW,
-				oldtheme['version'],Calendar.DEFAULT_THEME['version'])
+				oldtheme['version'],DataEditor.DEFAULT_THEME['version'])
 
 		# If the old version is too old, we will not know how to convert
-		if oldtheme['version'] < Calendar.OLDEST_CONVERTIBLE_THEME_VERSION:
+		if oldtheme['version'] < DataEditor.OLDEST_CONVERTIBLE_THEME_VERSION:
 			raise VersionException(VersionException.TOO_OLD,
-				oldtheme['version'],Calendar.DEFAULT_THEME['version'])
+				oldtheme['version'],DataEditor.DEFAULT_THEME['version'])
 
 		# Finally, convert incrementally through all the versions
 		# Below is some sample code to copy:
@@ -80,16 +84,21 @@ class DataEditor (tk.Frame):
 			]},
 		]
 		Note that you cannot recursively build tables... yet.
-		The valid types are string, datetime, boolean, float, number, and table. The 'key' field
-		refers to the key in the dictionary that will be used to populate these textboxes.
+		The valid types are string, datetime, boolean, float, integer, and table. The 'key' field
+		refers to the key in the dictionary that will be used to populate these entries.
 		"""
 		super().__init__(parent,*args,**options)
 
 		# Initialize internal variables
-		# Array of callback functions for when the user edits a textbox
-		self._edittext_callbacks = []
-		# Validation function which triggers when any of the textboxes are changed
-		self._validation_reg = self.register(self._validation)
+		# Array of callback functions for when a save occurs
+		self._save_callbacks = []
+		# Data dict
+		self._data = None
+		# Whether to enable/disable root fields and table fields
+		self._root_field_state = 'readonly'
+		self._table_field_state = 'readonly'
+		self._table_button_state = 'disabled'
+		self._save_button_state = 'disabled'
 
 		# Update the dataeditortheme parameters (or set to defaults)
 		self._theme = helper.dictVersionUpdate(dataeditortheme,self._theme_version_update,
@@ -97,98 +106,412 @@ class DataEditor (tk.Frame):
 
 		# Create the fonts; no need to set anything, as they will be configured in update_theme
 		self._labels_font = tkfont.Font()
-		self._textboxes_font = tkfont.Font()
-		# Build the labels and textboxes
+		self._entries_font = tkfont.Font()
+		self._buttons_font = tkfont.Font()
+		self._save_button_font = tkfont.Font()
+		# Build the labels and entries
 		self._conf = conf
 		for i,field in enumerate(self._conf):
 			field['label'] = tk.Label(self,text=field['text'],font=self._labels_font)
-			field['label'].grid(column=0,row=i,sticky='e')
+			field['label'].grid(column=0,row=i,sticky='ne')
+			# One-row fields
 			if field['type'] != 'table':
-				field['entry'] = tk.Entry(self,font=self._textboxes_font,validate='all',
-					state='readonly',validatecommand=(
-						lambda a,iv,nv,at,self=self,i=i: self._validation_reg(a,iv,nv,at,i),
-						'%d','%s','%P','%V'))
+				field['entry'] = tk.Entry(self,font=self._entries_font,state=self._root_field_state)
 				field['entry'].grid(column=1,row=i,sticky='w')
+			# Multi-row/column fields
 			else:
 				field['frame'] = tk.Frame(self)
 				field['frame'].grid(column=1,row=i,sticky='w')
 				for j,subfield in enumerate(field['columns']):
 					subfield['label'] = tk.Label(field['frame'],text=subfield['text'],
 						font=self._labels_font)
-					subfield['label'].grid(column=i,row=0,sticky='ew')
-					subfield['entry'] = tk.Entry(field['frame'],font=self._textboxes_font,
-						validate='all',state='readonly',validatecommand=(
-							lambda a,iv,nv,at,self=self,i=i,j=j:
-								self._validation_reg(a,iv,nv,at,i,j),'%d','%s','%P','%V'))
-					subfield['entry'].grid(column=i,row=1,sticky='ew')
+					subfield['label'].grid(column=j,row=0,sticky='ew')
+					subfield['rows'] = []
+					subfield['rows'].append(tk.Entry(field['frame'],font=self._entries_font,
+						state=self._table_field_state))
+					subfield['rows'][-1].grid(column=j,row=1,sticky='ew')
+				field['buttons'] = [] # Don't need buttons until we have data
+		# Finally, tack on the save button
+		self._save_button = tk.Button(self,text="Save",font=self._save_button_font,
+			command=self.save_data,state=self._save_button_state)
+		self._save_button.grid(column=0,row=len(self._conf))
 
 		self.update_theme()
 
-	def _validation (self,action,initialvalue,newvalue,actiontype,fieldindex,subfieldindex=0):
-		"""_validation internal function
-		Entry validation function. If the value has changed, it changes the corresponding
-		dictionary field and then calls any callback functions.
+	def _convert_text (self, fieldtext, fieldindex, columnindex=0):
+		"""_convert_text internal function
+		Converts the given text to the indicated field's/column's type. Returns None if it
+		failed to convert.
 		"""
-		if self._dict != None
+		# If a table, grab the column's type; otherwise, grab the field's type
+		field = self._conf[fieldindex]
+		if field['type'] == 'table':
+			fieldtype = field['columns'][columnindex]['type']
+		else:
+			fieldtype = field['type']
+
+		# Convert fieldtext from str to the desired type, based on the field type
+		if fieldtype == 'boolean':
+			if fieldtext.lower() in ("true","1"):
+				datavalue = True
+			elif fieldtext.lower() in ("false","0"):
+				datavalue = False
+			else:
+				return None
+		elif fieldtype == 'float':
+			try:
+				datavalue = float(fieldtext)
+			except:
+				return None
+		elif fieldtype == 'integer':
+			try:
+				datavalue = int(fieldtext)
+			except:
+				return None
+		elif fieldtype == 'datetime':
+			try:
+				datavalue = time.mktime(time.strptime(fieldtext,helper.DATE_FORMAT))
+			except:
+				return None
+		else:
+			# Assume string with no conversion
+			datavalue = fieldtext
+
+		return datavalue
+
+	def _convert_value (self, datavalue, fieldindex, columnindex=0):
+		"""_convert_value internal function
+		Converts the given value to an appropriate string, given the indicated
+		field's/column's type. Returns None if it failed to convert.
+		"""
+		# If a table, grab the column's type; otherwise, grab the field's type
+		field = self._conf[fieldindex]
+		if field['type'] == 'table':
+			fieldtype = field['columns'][columnindex]['type']
+		else:
+			fieldtype = field['type']
+
+		# Convert datavalue from the type to string
+		if fieldtype == 'datetime':
+			try:
+				fieldtext = time.strftime(helper.DATE_FORMAT,time.localtime(datavalue))
+			except:
+				return None
+		else:
+			# Assume default string conversion
+			fieldtext = str(datavalue)
+
+		return fieldtext
+
+	def _delete_row (self, fieldindex, rowindex):
+		"""_delete_row internal function
+		Deletes a row from a table field.
+		"""
+		# Delete the data from the data dict
+		datakey = self._conf[fieldindex]['key']
+		del self._data[datakey][rowindex]
+		# Refresh the table's widgets
+		self._refresh_table(fieldindex)
+
+	def _add_row (self, fieldindex):
+		"""_add_row internal function
+		Adds a row to the end of the grid for the given table field.
+		"""
+		# Construct the new row based on defaults for the column types
+		field = self._conf[fieldindex]
+		newrow = []
+		for column in field['columns']:
+			if column['type'] == 'boolean':
+				newrow.append(False)
+			elif column['type'] == 'float':
+				newrow.append(0.0)
+			elif column['type'] == 'integer':
+				newrow.append(0)
+			elif column['type'] == 'datetime':
+				newrow.append(time.time())
+			else:
+				newrow.append('')
+		# Add the row to the data dict and then refresh the view of it
+		datakey = field['key']
+		self._data[datakey].append(newrow)
+		self._refresh_table(fieldindex)
+
+	def _refresh_table (self, fieldindex, initial=False):
+		"""_refresh_table internal function
+		Removes all the entry widgets from the given table and then readds based on the data.
+		"""
+		field = self._conf[fieldindex]
+		# Delete entries
+		for subfield in field['columns']:
+			for row in subfield['rows']:
+				row.destroy()
+			subfield['rows'] = []
+		# Delete add/delete buttons
+		for i in range(len(field['buttons'])):
+			field['buttons'][i].destroy()
+		field['buttons'] = []
+		# Re-add entries
+		datakey = field['key']
+		for i,subfield in enumerate(field['columns']):
+			for j,row in enumerate(self._data[datakey]):
+				if subfield['type'] == 'boolean':
+					subfield['rows'].append(tk.Entry(field['frame'],width=5,
+						font=self._entries_font,state=self._table_field_state))
+				else:
+					subfield['rows'].append(tk.Entry(field['frame'],
+						font=self._entries_font,state=self._table_field_state))
+				self._read_data(fieldindex,i,j)
+				subfield['rows'][-1].grid(column=i,row=j+1,sticky='ew')
+		# Re-add buttons
+		for j in range(len(self._data[datakey])):
+			field['buttons'].append(
+				tk.Button(field['frame'],text='-',font=self._buttons_font,
+					state=self._table_button_state,
+					command=lambda self=self,fieldindex=fieldindex,rowindex=j:
+						self._delete_row(fieldindex,rowindex)))
+			field['buttons'][-1].grid(column=len(field['columns'])+1,row=j+1)
+		field['buttons'].append(
+			tk.Button(field['frame'],text='+',font=self._buttons_font,
+				state=self._table_button_state,
+				command=lambda self=self,fieldindex=fieldindex:self._add_row(fieldindex)))
+		field['buttons'][-1].grid(
+			column=0,row=len(self._data[datakey])+1,columnspan=len(field['columns'])+1)
+		# Refresh the theme if this is not being called from the data setup function
+		if not initial:
+			self.update_theme()
+
+	def _read_data (self, fieldindex, column=0, row=0):
+		"""_read_data internal function
+		Reads from the data dict and constructs a string to place in the indicated entry widget.
+		"""
+		field = self._conf[fieldindex]
+		datakey = field['key']
+		if field['type'] == 'table':
+			entrywidget = field['columns'][column]['rows'][row]
+			datavalue = self._data[datakey][row][column]
+			fieldtext = self._convert_value(datavalue,fieldindex,column)
+		else:
+			entrywidget = field['entry']
+			datavalue = self._data[datakey]
+			fieldtext = self._convert_value(datavalue,fieldindex)
+
+		# If we failed to convert, default to empty string
+		if fieldtext == None:
+			fieldtext = ""
+
+		state = entrywidget.cget('state')
+		entrywidget.config(state='normal')
+		if entrywidget.get() == "":
+			entrywidget.insert(0,"blah")
+		entrywidget.delete(0,tk.END)
+		entrywidget.insert(0,fieldtext)
+		entrywidget.config(state=state)
+
+	def _write_data (self, fieldindex, column=0, row=0, newvalue=None):
+		"""_write_data internal function
+		If newvalue is provided, this just stores the value in the data dict. Otherwise, it tries
+		to convert it to the correct format first and then store it.
+		Returns True if it succeeded in converting/storing; False otherwise.
+		"""
+		field = self._conf[fieldindex]
+		# If we were not given a value, grab it from the field and try to convert it
+		if newvalue == None:
+			if field['type'] == 'table':
+				newvalue = field['columns'][column]['rows'][row].get()
+			else:
+				newvalue = field['entry'].get()
+			newvalue = self._convert_text(newvalue,fieldindex,column)
+			if newvalue == None:
+				return False
+
+		# Finally, place the new value in the data and then re-read it so the user sees the change
+		datakey = field['key']
+		if field['type'] == 'table':
+			self._data[datakey][row][column] = newvalue
+		else:
+			self._data[datakey] = newvalue
+		self._read_data(fieldindex,column,row)
+		return True
+
+	def load_data (self, data):
+		"""load_data function
+		Loads the provided data dict into the fields.
+		"""
+		self._data = data
+		for i,field in enumerate(self._conf):
+			if field['key'] not in self._data:
+				self._data[field['key']] = ''
+
+			if field['type'] == 'table':
+				self._refresh_table(i,initial=True)
+			else:
+				self._read_data(i)
+
+		self.update_theme()
+
+	def save_data (self):
+		"""save_data function
+		Converts and saves the field text to the data dict. If anything fails to convert,
+		it does not store the new data. Either way, it calls any registered save callback
+		functions with a list of error dicts.
+		"""
+		# Convert each text field to the appropriate type, and store the value in a temp var
+		errors = []
+		for i,field in enumerate(self._conf):
+			if field['type'] != 'table':
+				field['convertedvalue'] = self._convert_text(field['entry'].get(),i)
+				if field['convertedvalue'] == None:
+					errors.append({
+						'label':field['text'],
+						'key':field['key'],
+						'tableindex':(0,0),
+						'type':field['type'],
+						'badtext':field['entry'].get()
+					})
+			else:
+				for j,subfield in enumerate(field['columns']):
+					subfield['convertedvalues'] = [None for k in range(len(subfield['rows']))]
+					for k,row in enumerate(subfield['rows']):
+						subfield['convertedvalues'][k] = self._convert_text(row.get(),i,j)
+						if subfield['convertedvalues'][k] == None:
+							errors.append({
+								'label':field['text'],
+								'key':field['key'],
+								'tableindex':(k,j),
+								'type':subfield['type'],
+								'badtext':row.get()
+							})
+
+		# If no errors, write the converted values to the data dict
+		if len(errors) == 0:
+			for i,field in enumerate(self._conf):
+				if field['type'] != 'table':
+					self._write_data(i,newvalue=field['convertedvalue'])
+				else:
+					for j,subfield in enumerate(field['columns']):
+						for k,row in enumerate(subfield['rows']):
+							self._write_data(i,j,k,subfield['convertedvalues'][k])
+
+		# Let registered functions know that we finished
+		for f in self._save_callbacks:
+			f(errors)
+
+	def register_save_callback (self, function):
+		"""register_save_callback function
+		Registers a function which will be called when the save finishes.
+		The function should accept one parameter, a list of error dictionaries. Each error dict
+		contains the following keys: label, key, tableindex, type, and badtext.
+		"""
+		self._save_callbacks.append(function)
 
 	def update_theme (self):
 		"""update_theme function
 		Updates the fonts/colors/styles from the theme attribute. Used when the user changes
 		the theme.
 		"""
-		widgets = (
-			(self._change_year_label,'basic'),
-			(self._change_month_label,'basic'),
-			(self._today_button,'basic'),
-			(self._change_month_minus,'basic'),
-			(self._change_month_plus,'basic'),
-			(self._change_year_minus,'basic'),
-			(self._change_year_plus,'basic'),
-			(self,'widget'),
-			(self._change_year_label,'year'),
-			(self._change_month_label,'month'),
-			(self._today_button,'today button'),
-			(self._change_month_minus,'nav buttons'),
-			(self._change_month_plus,'nav buttons'),
-			(self._change_year_minus,'nav buttons'),
-			(self._change_year_plus,'nav buttons'),
-		)
-		fontwidgets = (
-			(self._year_font,'year'),
-			(self._month_font,'month'),
-			(self._weekday_font,'weekday'),
-			(self._day_font,'day'),
-			(self._nav_buttons_font,'nav buttons'),
-			(self._selected_day_font,'selected day'),
-			(self._today_button_font,'today button'),
-		)
-		for widget,name in widgets:
-			helper.configThemeFromDict(widget,self._theme,'base',name)
-		for widget,name in fontwidgets:
-			helper.configThemeFromDict(widget,self._theme,'fonts',name)
+		# Update fonts
+		helper.configThemeFromDict(self._entries_font,self._theme,'fonts','entries')
+		helper.configThemeFromDict(self._labels_font,self._theme,'fonts','labels')
+		helper.configThemeFromDict(self._buttons_font,self._theme,'fonts','buttons')
+		helper.configThemeFromDict(self._save_button_font,self._theme,'fonts','save button')
+		helper.configThemeFromDict(self._save_button,self._theme,'base','save button')
+		# Update widgets
+		for field in self._conf:
+			helper.configThemeFromDict(field['label'],self._theme,'base','labels')
+			if field['type'] != 'table':
+				helper.configThemeFromDict(field['entry'],self._theme,'base','entries')
+			else:
+				for subfield in field['columns']:
+					helper.configThemeFromDict(subfield['label'],self._theme,'base','labels')
+					for row in subfield['rows']:
+						helper.configThemeFromDict(row,self._theme,'base','entries')
+				for button in field['buttons']:
+					helper.configThemeFromDict(button,self._theme,'base','buttons')
 
-	def register_selectday_callback (self, callback):
-		"""register_selectday_callback function
-		Registers a function which will be called whenever the selected day changes.
+	def update_data_for_key (self, key):
+		"""update_data_for_key function
+		Updates the data for a single key, allowing running timers to update the data editor.
 		"""
-		self._selectday_callbacks.append(callback)
+		for i,field in enumerate(self._conf):
+			if field['key'] == key:
+				if field['type'] == 'table':
+					self._refresh_table(i)
+				else:
+					self._read_data(i)
 
-	def _call_selectday_callbacks (self):
-		"""_call_selectday_callbacks internal function
-		Calls all the previously-registered selectday callback functions.
+	def enable (self, rootfields=True, tables=None):
+		"""enable function
+		Enables/disables the entry fields. rootfields controls everything but tables.
+		tables controls the tables. If tables is not provided, assume same setting as rootfields.
 		"""
-		for f in self._selectday_callbacks:
-			f(self,self._selected_date)
+		if tables == None:
+			tables = rootfields
+		if rootfields:
+			self._root_field_state = 'normal'
+			self._save_button_state = 'normal'
+		else:
+			self._root_field_state = 'readonly'
+			self._save_button_state = 'disabled'
+		if tables:
+			self._table_field_state = 'normal'
+			self._table_button_state = 'normal'
+		else:
+			self._table_field_state = 'readonly'
+			self._table_button_state = 'disabled'
+
+		self._toggle_states()
+
+	def _toggle_states (self):
+		"""_toggle_states internal function
+		Sets each field/button to enabled or disabled based on the internal variables.
+		"""
+		for field in self._conf:
+			if field['type'] == 'table':
+				for subfield in field['columns']:
+					for row in subfield['rows']:
+						row.configure(state=self._table_field_state)
+				for button in field['buttons']:
+					button.configure(state=self._table_button_state)
+			else:
+				field['entry'].configure(state=self._root_field_state)
+		self._save_button.config(state=self._save_button_state)
 
 if __name__ == "__main__":
-	import traceback
+	import traceback, json
 	try:
-		def selectday_callback (widget, selected_date):
-			print(selected_date)
+		def save_callback (errors):
+			global label
+			label.config(text=str(len(errors))+" errors")
+			if len(errors) == 0:
+				label.config(fg='black')
+			else:
+				label.config(fg='red')
+			print(json.dumps(data,indent='\t',separators=(', ',':')))
 		root = tk.Tk()
-		cal = Calendar(root)
-		cal.register_selectday_callback(selectday_callback)
-		cal.pack()
+		config = [
+			{'type':'string','text':"Title/Ticket",'key':'title'},
+			{'type':'string','text':"Description",'key':'description'},
+			{'type':'string','text':"Source System",'key':'source system'},
+			{'type':'table','text':"Intervals",'key':'intervals','columns':[
+				{'type':'datetime','text':"Start"},
+				{'type':'datetime','text':"End"},
+				{'type':'boolean','text':"Exported"},
+				{'type':'string','text':"Description"},
+			]},
+		]
+		data = {
+			"source system":"YATTi", "intervals":[
+				[1505221371.8944616,1505221375.320189,False,""],
+				[1505222275.3718667,1505222283.2568984,False,""]
+			], "description":"Default timer", "title":"TIMER", "version":[1,0,0]
+		}
+		de = DataEditor(root,config)
+		de.pack()
+		de.register_save_callback(save_callback)
+		de.load_data(data)
+		de.enable()
+		label = tk.Label(root,text=" ")
+		label.pack()
 		root.mainloop()
 	except Exception as e:
 		print()

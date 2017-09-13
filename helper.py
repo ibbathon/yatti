@@ -8,6 +8,7 @@ PLAY_CHAR=u'\u23F5'
 PAUSE_CHAR=u'\u23F8'
 LEFT_CHAR=u'\u23F4'
 RIGHT_CHAR=u'\u23F5'
+DATE_FORMAT="%Y-%m-%d %H:%M:%S"
 NUM_WEEKDAYS=7
 WEEKDAYS=(
 	("S","U","Su","Sun","Sunday"),

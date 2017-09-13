@@ -1,7 +1,7 @@
 """yatti module
 Author = Richard D. Fears
 Created = 2017-08-25
-LastModified = 2017-09-07
+LastModified = 2017-09-13
 Description = Main file of the YATTi program. Builds and displays all of the necessary screens
 	(e.g. timers, calendar, timer data). Also reads and writes out the theme, data, settings,
 	and password files.
@@ -15,6 +15,7 @@ from appdirs import AppDirs
 # My code imports
 import helper
 from timerbutton import TimerButton
+from dataeditor import DataEditor
 
 class YattiMain:
 	"""YattiMain class
@@ -29,6 +30,7 @@ class YattiMain:
 		'version':[1,0,0],
 		'calendar':{},
 		'timerbuttons':{},
+		'dataeditor':{},
 		'base':{
 			'buttons':{},
 		},
@@ -69,6 +71,17 @@ class YattiMain:
 		'version':[1,0,0],
 		'timerdata':[],
 	}
+	DATA_CONFIG = [
+		{'type':'string','text':"Title/Ticket",'key':'title'},
+		{'type':'string','text':"Description",'key':'description'},
+		{'type':'string','text':"Source System",'key':'source system'},
+		{'type':'table','text':"Intervals",'key':'intervals','columns':[
+			{'type':'datetime','text':"Start"},
+			{'type':'datetime','text':"End"},
+			{'type':'boolean','text':"Exported"},
+			{'type':'string','text':"Description"},
+		]},
+	]
 	OLDEST_CONVERTIBLE_PASSWORDS_VERSION = [1,0,0]
 	DEFAULT_PASSWORDS = {
 		'version':[1,0,0],
@@ -260,6 +273,7 @@ class YattiMain:
 		Main driver function for YATTi program. Builds all the widgets and runs the main loop.
 		"""
 		self._root = tk.Tk()
+		self._root.title("YATTi - Yet Another Tracker of Time")
 		# Grab the previous size from the settings and place the window in the center of the screen
 		rootwidth = self._settings['root width']
 		rootheight = self._settings['root height']
@@ -303,15 +317,54 @@ class YattiMain:
 		self._quick_add_button.grid(column=1,row=2)
 
 		### Right pane ###
-		templabel = tk.Label(self._root,text="Blah")
-		templabel.grid(row=1,column=2,rowspan=2)
-		#templabel.bind('<Button-1>', lambda e,self=self: self._canvas_reconfigure())
+		self._current_timerbutton = None
+		self._dataeditor_updater = None
+		dataeditorframe = tk.Frame(self._root)
+		dataeditorframe.grid(row=1,column=2,rowspan=2,sticky='nw')
+		self._dataeditor = DataEditor(dataeditorframe,self.DATA_CONFIG,self._theme['dataeditor'])
+		self._dataeditor.pack()
+		self._dataeditor.register_save_callback(self._data_editor_saved)
+		self._dataeditorerrors = tk.Label(dataeditorframe,text=" ")
+		self._dataeditorerrors.pack()
 
 		### Adding timer buttons and reconfiguring ###
 		self._load_timers_from_json()
 		self.update_theme()
 
 		self._root.mainloop()
+
+	def _set_current_timerbutton (self, tb):
+		"""_set_current_timerbutton internal function
+		Called when clicking on a timer label. Initializes the data editor's data.
+		"""
+		self._current_timerbutton = tb
+		self._dataeditor.load_data(self._current_timerbutton._data)
+		self._dataeditor.enable(tables=not self._current_timerbutton.running)
+
+		if self._dataeditor_updater != None:
+			self._root.after_cancel(self._dataeditor_updater)
+			self._dataeditor_updater = None
+		if self._current_timerbutton.running:
+			self._dataeditor_updater = self._root.after(500,self._update_dataeditor)
+
+	def _update_dataeditor (self):
+		"""_update_dataeditor internal function
+		Updates the intervals section of the data editor, allowing a running timer.
+		"""
+		self._dataeditor.update_data_for_key('intervals')
+		self._dataeditor_updater = self._root.after(500,self._update_dataeditor)
+
+	def _data_editor_saved (self, errors):
+		"""_data_editor_saved internal function
+		Called when the data editor save button is clicked. Updates the timer button data.
+		"""
+		if self._current_timerbutton == None:
+			return
+		self._current_timerbutton.update_data()
+		if len(errors) > 0:
+			self._dataeditorerrors.configure(fg='red',text=str(len(errors))+" errors while saving")
+		else:
+			self._dataeditorerrors.configure(fg='dark green',text="Saved successfully")
 
 	def _write_all_files (self):
 		"""_write_all_files internal function
@@ -338,9 +391,9 @@ class YattiMain:
 		try:
 			with open(filedir+os.sep+filename,'w') as fileobj:
 				if wrapperfunc == None:
-					json.dump(sourcedict,fileobj)
+					json.dump(sourcedict,fileobj,indent="\t",separators=(', ',':'))
 				else:
-					fileobj.write(wrapperfunc(json.dumps(sourcedict)))
+					fileobj.write(wrapperfunc(json.dumps(sourcedict,"\t",separators=(', ',':'))))
 			return True
 		# If we can't, notify the user
 		except:
@@ -368,6 +421,7 @@ class YattiMain:
 		self._timers[-1].pack()
 		self._timers[-1].update_theme()
 		self._timers[-1].register_toggle_callback(self._timer_toggled)
+		self._timers[-1].register_labelclick_callback(self._set_current_timerbutton)
 		self._canvas_reconfigure()
 		self._canvas.yview_moveto(1)
 
@@ -376,11 +430,19 @@ class YattiMain:
 		The function which is called for each timer when said timer is toggled.
 		"""
 		# If we want to pause other timers when this one is started, do so
-		print(self._settings['pause other timers'],thetimer.running)
 		if self._settings['pause other timers'] and thetimer.running:
 			for timer in self._timers:
 				if timer != thetimer:
 					timer.turn_off()
+		# If there is a running dataeditor updater, cancel it before checking if we should start
+		# a new one
+		if self._dataeditor_updater != None:
+			self._root.after_cancel(self._dataeditor_updater)
+			self._dataeditor_updater = None
+		if thetimer == self._current_timerbutton:
+			self._dataeditor.enable(tables=not self._current_timerbutton.running)
+			if self._current_timerbutton.running:
+				self._dataeditor_updater = self._root.after(500,self._update_dataeditor)
 
 	def update_theme (self):
 		"""update_theme function
@@ -395,7 +457,7 @@ class YattiMain:
 		fontwidgets = (
 			(self._button_font,'buttons'),
 		)
-		subwidgets = []+self._timers
+		subwidgets = [self._dataeditor]+self._timers
 
 		for widget,name in widgets:
 			helper.configThemeFromDict(widget,self._theme,'base',name)

@@ -1,7 +1,7 @@
 """timerbutton module
 Author = Richard D. Fears
 Created = 2017-08-22
-LastModified = 2017-09-06
+LastModified = 2017-09-13
 Description = Provides the TimerButton Tk widget, which contains a timer label, timer description,
 	and button to start/stop the timer.
 """
@@ -335,6 +335,7 @@ class TimerButton (tk.Frame):
 		"""
 		self._title_label.configure(text=self._data['title'])
 		self._desc_label.configure(text=self._data['description'])
+		self._update_timer(restarttimer=False)
 
 	def update_theme (self):
 		"""update_theme function
