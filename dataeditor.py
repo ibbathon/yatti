@@ -1,7 +1,7 @@
 """dataeditor module
 Author = Richard D. Fears
 Created = 2017-09-10
-LastModified = 2017-09-13
+LastModified = 2017-09-14
 Description = Provides the DataEditor Tk widget. This widget provides a grid of descriptions
 	and labels for editing a single-level dictionary.
 """
@@ -138,11 +138,12 @@ class DataEditor (tk.Frame):
 
 		self.update_theme()
 
-	def _convert_text (self, fieldtext, fieldindex, columnindex=0):
-		"""_convert_text internal function
+	def _convert_field_to_data (self, fieldentry, fieldindex, columnindex=-1):
+		"""_convert_field_to_data internal function
 		Converts the given text to the indicated field's/column's type. Returns None if it
 		failed to convert.
 		"""
+		fieldvalue = fieldentry.get()
 		# If a table, grab the column's type; otherwise, grab the field's type
 		field = self._conf[fieldindex]
 		if field['type'] == 'table':
@@ -150,37 +151,37 @@ class DataEditor (tk.Frame):
 		else:
 			fieldtype = field['type']
 
-		# Convert fieldtext from str to the desired type, based on the field type
+		# Convert fieldvalue from str to the desired type, based on the field type
 		if fieldtype == 'boolean':
-			if fieldtext.lower() in ("true","1"):
+			if fieldvalue.lower() in ("true","1"):
 				datavalue = True
-			elif fieldtext.lower() in ("false","0"):
+			elif fieldvalue.lower() in ("false","0"):
 				datavalue = False
 			else:
 				return None
 		elif fieldtype == 'float':
 			try:
-				datavalue = float(fieldtext)
+				datavalue = float(fieldvalue)
 			except:
 				return None
 		elif fieldtype == 'integer':
 			try:
-				datavalue = int(fieldtext)
+				datavalue = int(fieldvalue)
 			except:
 				return None
 		elif fieldtype == 'datetime':
 			try:
-				datavalue = time.mktime(time.strptime(fieldtext,helper.DATE_FORMAT))
+				datavalue = time.mktime(time.strptime(fieldvalue,helper.DATE_FORMAT))
 			except:
 				return None
 		else:
 			# Assume string with no conversion
-			datavalue = fieldtext
+			datavalue = fieldvalue
 
 		return datavalue
 
-	def _convert_value (self, datavalue, fieldindex, columnindex=0):
-		"""_convert_value internal function
+	def _convert_data_to_field (self, datavalue, fieldindex, columnindex=-1):
+		"""_convert_data_to_field internal function
 		Converts the given value to an appropriate string, given the indicated
 		field's/column's type. Returns None if it failed to convert.
 		"""
@@ -194,14 +195,14 @@ class DataEditor (tk.Frame):
 		# Convert datavalue from the type to string
 		if fieldtype == 'datetime':
 			try:
-				fieldtext = time.strftime(helper.DATE_FORMAT,time.localtime(datavalue))
+				fieldvalue = time.strftime(helper.DATE_FORMAT,time.localtime(datavalue))
 			except:
 				return None
 		else:
 			# Assume default string conversion
-			fieldtext = str(datavalue)
+			fieldvalue = str(datavalue)
 
-		return fieldtext
+		return fieldvalue
 
 	def _delete_row (self, fieldindex, rowindex):
 		"""_delete_row internal function
@@ -210,8 +211,7 @@ class DataEditor (tk.Frame):
 		# Delete the data from the data dict
 		datakey = self._conf[fieldindex]['key']
 		del self._data[datakey][rowindex]
-		# Refresh the table's widgets
-		self._refresh_table(fieldindex)
+		self._rebuild_table(fieldindex)
 
 	def _add_row (self, fieldindex):
 		"""_add_row internal function
@@ -234,10 +234,10 @@ class DataEditor (tk.Frame):
 		# Add the row to the data dict and then refresh the view of it
 		datakey = field['key']
 		self._data[datakey].append(newrow)
-		self._refresh_table(fieldindex)
+		self._rebuild_table(fieldindex)
 
-	def _refresh_table (self, fieldindex, initial=False):
-		"""_refresh_table internal function
+	def _rebuild_table (self, fieldindex, initial=False):
+		"""_rebuild_table internal function
 		Removes all the entry widgets from the given table and then readds based on the data.
 		"""
 		field = self._conf[fieldindex]
@@ -280,7 +280,17 @@ class DataEditor (tk.Frame):
 		if not initial:
 			self.update_theme()
 
-	def _read_data (self, fieldindex, column=0, row=0):
+	def _refresh_table (self, fieldindex):
+		"""_refresh_table internal function
+		Re-reads the data from data dict into the given table.
+		"""
+		field = self._conf[fieldindex]
+		datakey = field['key']
+		for i,subfield in enumerate(field['columns']):
+			for j,row in enumerate(subfield['rows']):
+				self._read_data(fieldindex,i,j)
+
+	def _read_data (self, fieldindex, column=-1, row=-1):
 		"""_read_data internal function
 		Reads from the data dict and constructs a string to place in the indicated entry widget.
 		"""
@@ -289,42 +299,32 @@ class DataEditor (tk.Frame):
 		if field['type'] == 'table':
 			entrywidget = field['columns'][column]['rows'][row]
 			datavalue = self._data[datakey][row][column]
-			fieldtext = self._convert_value(datavalue,fieldindex,column)
+			fieldvalue = self._convert_data_to_field(datavalue,fieldindex,column)
 		else:
 			entrywidget = field['entry']
 			datavalue = self._data[datakey]
-			fieldtext = self._convert_value(datavalue,fieldindex)
+			fieldvalue = self._convert_data_to_field(datavalue,fieldindex)
 
 		# If we failed to convert, default to empty string
-		if fieldtext == None:
-			fieldtext = ""
+		if fieldvalue == None:
+			fieldvalue = ""
 
 		state = entrywidget.cget('state')
 		entrywidget.config(state='normal')
 		if entrywidget.get() == "":
 			entrywidget.insert(0,"blah")
 		entrywidget.delete(0,tk.END)
-		entrywidget.insert(0,fieldtext)
+		entrywidget.insert(0,fieldvalue)
 		entrywidget.config(state=state)
 
-	def _write_data (self, fieldindex, column=0, row=0, newvalue=None):
+	def _write_data (self, newvalue, fieldindex, column=-1, row=-1):
 		"""_write_data internal function
 		If newvalue is provided, this just stores the value in the data dict. Otherwise, it tries
 		to convert it to the correct format first and then store it.
 		Returns True if it succeeded in converting/storing; False otherwise.
 		"""
 		field = self._conf[fieldindex]
-		# If we were not given a value, grab it from the field and try to convert it
-		if newvalue == None:
-			if field['type'] == 'table':
-				newvalue = field['columns'][column]['rows'][row].get()
-			else:
-				newvalue = field['entry'].get()
-			newvalue = self._convert_text(newvalue,fieldindex,column)
-			if newvalue == None:
-				return False
-
-		# Finally, place the new value in the data and then re-read it so the user sees the change
+		# Place the new value in the data and then re-read it so the user sees the change
 		datakey = field['key']
 		if field['type'] == 'table':
 			self._data[datakey][row][column] = newvalue
@@ -343,7 +343,7 @@ class DataEditor (tk.Frame):
 				self._data[field['key']] = ''
 
 			if field['type'] == 'table':
-				self._refresh_table(i,initial=True)
+				self._rebuild_table(i,initial=True)
 			else:
 				self._read_data(i)
 
@@ -359,7 +359,7 @@ class DataEditor (tk.Frame):
 		errors = []
 		for i,field in enumerate(self._conf):
 			if field['type'] != 'table':
-				field['convertedvalue'] = self._convert_text(field['entry'].get(),i)
+				field['convertedvalue'] = self._convert_field_to_data(field['entry'],i)
 				if field['convertedvalue'] == None:
 					errors.append({
 						'label':field['text'],
@@ -372,7 +372,7 @@ class DataEditor (tk.Frame):
 				for j,subfield in enumerate(field['columns']):
 					subfield['convertedvalues'] = [None for k in range(len(subfield['rows']))]
 					for k,row in enumerate(subfield['rows']):
-						subfield['convertedvalues'][k] = self._convert_text(row.get(),i,j)
+						subfield['convertedvalues'][k] = self._convert_field_to_data(row,i,j)
 						if subfield['convertedvalues'][k] == None:
 							errors.append({
 								'label':field['text'],
@@ -386,11 +386,11 @@ class DataEditor (tk.Frame):
 		if len(errors) == 0:
 			for i,field in enumerate(self._conf):
 				if field['type'] != 'table':
-					self._write_data(i,newvalue=field['convertedvalue'])
+					self._write_data(field['convertedvalue'],i)
 				else:
 					for j,subfield in enumerate(field['columns']):
 						for k,row in enumerate(subfield['rows']):
-							self._write_data(i,j,k,subfield['convertedvalues'][k])
+							self._write_data(subfield['convertedvalues'][k],i,j,k)
 
 		# Let registered functions know that we finished
 		for f in self._save_callbacks:
@@ -435,7 +435,11 @@ class DataEditor (tk.Frame):
 		for i,field in enumerate(self._conf):
 			if field['key'] == key:
 				if field['type'] == 'table':
-					self._refresh_table(i)
+					# Rebuild if the data has different number of rows than the entries
+					if len(field['columns'][0]['rows']) != len(self._data[key]):
+						self._rebuild_table(i)
+					else:
+						self._refresh_table(i)
 				else:
 					self._read_data(i)
 
