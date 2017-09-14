@@ -1,7 +1,6 @@
 """helper module
 Author = Richard D. Fears
 Created = 2017-08-22
-LastModified = 2017-08-31
 Description = Provides some helper functions and constants for use in my other programs.
 """
 PLAY_CHAR=u'\u23F5'

@@ -1,7 +1,6 @@
 """timerbutton module
 Author = Richard D. Fears
 Created = 2017-08-22
-LastModified = 2017-09-13
 Description = Provides the TimerButton Tk widget, which contains a timer label, timer description,
 	and button to start/stop the timer.
 """
@@ -205,6 +204,8 @@ class TimerButton (tk.Frame):
 		"""_toggle internal function
 		Toggles the timer between running and paused.
 		"""
+		# Before any start or stop, sort the intervals
+		self._data['intervals'].sort()
 		if self.running:
 			self._start_button.configure(text=helper.PAUSE_CHAR)
 			self._curr_start_time = time.time()
@@ -259,13 +260,14 @@ class TimerButton (tk.Frame):
 		if restarttimer:
 			self._timer_updater = self.after(500,self._update_timer)
 
-	def total_elapsed_time (self, end_time = 0):
+	def total_elapsed_time (self, end_time=0, unexportedonly=True):
 		"""total_elapsed_time function
 		Add up all the time from both the stored intervals and the current interval.
 		"""
 		sum_time = 0
 		for interval in self._data['intervals']:
-			sum_time += interval[1]-interval[0]
+			if not interval[2] or not unexportedonly:
+				sum_time += interval[1]-interval[0]
 		return sum_time
 
 	def _store_time (self,end_time):
@@ -299,30 +301,21 @@ class TimerButton (tk.Frame):
 		old_start_time = self._data['intervals'][-1][0]
 		old_end_time = self._data['intervals'][-1][1]
 
-		# Check for overlapping intervals
+		# If the old interval contains the new start time, we should use the old start time,
+		# but the new end time, erasing any future end time
 		if replaceOverlapping and new_start_time > old_start_time and new_start_time < old_end_time:
-			# The old interval contains the new start time, so we should use the old start time
-			replace = True
-			new_start_time = old_start_time
-		if replaceOverlapping and new_end_time > old_start_time and new_end_time < old_end_time:
-			# The old interval contains the new end time, so we should use the old end time
-			replace = True
-			new_end_time = old_end_time
-		# By definition, the overlapping and adjacent conditions cannot happen at the same time,
-		# so if there is an overlap replacement, do it now and exit
-		if replace:
-			self._data['intervals'][-1][0] = new_start_time
+			# By definition, the overlapping and adjacent conditions cannot happen at the same
+			# time, so if there is an overlap replacement, do it now and exit
+			self._curr_start_time = old_start_time
+			self._data['intervals'][-1][0] = old_start_time
 			self._data['intervals'][-1][1] = new_end_time
 			return
 
-		# Check for adjacent intervals
+		# If the intervals are close enough, join them
 		if replaceAdjacent and new_start_time > old_end_time \
 			and new_start_time-old_end_time <= maxAdjacent:
-			# The intervals are close enough, so join them
-			replace = True
-			new_start_time = old_start_time
-		if replace:
-			self._data['intervals'][-1][0] = new_start_time
+			self._curr_start_time = old_start_time
+			self._data['intervals'][-1][0] = old_start_time
 			self._data['intervals'][-1][1] = new_end_time
 			return
 

@@ -1,7 +1,6 @@
 """dataeditor module
 Author = Richard D. Fears
 Created = 2017-09-10
-LastModified = 2017-09-14
 Description = Provides the DataEditor Tk widget. This widget provides a grid of descriptions
 	and labels for editing a single-level dictionary.
 """

@@ -1,7 +1,6 @@
 """yatti module
 Author = Richard D. Fears
 Created = 2017-08-25
-LastModified = 2017-09-13
 Description = Main file of the YATTi program. Builds and displays all of the necessary screens
 	(e.g. timers, calendar, timer data). Also reads and writes out the theme, data, settings,
 	and password files.
@@ -201,7 +200,15 @@ class YattiMain:
 		yet, it creates base versions.
 		"""
 		# Get the preferred settings location
-		self._dirs = AppDirs(appname="YATTi",appauthor="GrayShadowSoftware")
+		global DEBUG
+		try:
+			DEBUG
+		except:
+			DEBUG = False
+		if DEBUG:
+			self._dirs = AppDirs(appname="YATTi",appauthor="GrayShadowSoftware",version="Debug")
+		else:
+			self._dirs = AppDirs(appname="YATTi",appauthor="GrayShadowSoftware")
 		configprefix = self._dirs.user_config_dir
 		dataprefix = self._dirs.user_data_dir
 		# First read in the settings file
@@ -274,6 +281,7 @@ class YattiMain:
 		"""
 		self._root = tk.Tk()
 		self._root.title("YATTi - Yet Another Tracker of Time")
+		self._root.protocol("WM_DELETE_WINDOW",self._close_window)
 		# Grab the previous size from the settings and place the window in the center of the screen
 		rootwidth = self._settings['root width']
 		rootheight = self._settings['root height']
@@ -332,6 +340,13 @@ class YattiMain:
 		self.update_theme()
 
 		self._root.mainloop()
+
+	def _close_window (self):
+		"""_close_window internal function
+		Callback for when the main window is closed. Saves all files and then exits.
+		"""
+		self._write_all_files()
+		self._root.destroy()
 
 	def _set_current_timerbutton (self, tb):
 		"""_set_current_timerbutton internal function
@@ -468,8 +483,16 @@ class YattiMain:
 
 
 if __name__ == "__main__":
-	import os, traceback
-	os.chdir(os.path.dirname(os.path.abspath(__file__)))
+	# Using HOME now, so no need to CD to CD
+	#import os
+	#os.chdir(os.path.dirname(os.path.abspath(__file__)))
+	import sys, traceback
+	# Check if we were passed the debug flag
+	if len(sys.argv) > 1 and sys.argv[1] == "--debug":
+		DEBUG = True
+	else:
+		DEBUG = False
+
 	try:
 		main = YattiMain()
 		main.run()
@@ -477,5 +500,7 @@ if __name__ == "__main__":
 		print()
 		traceback.print_exc()
 	finally:
-		input("Press enter to quit")
+		# If the app is not frozen, pause the console window so we can see errors
+		if not getattr(sys,'frozen',False):
+			input("Press enter to quit")
 

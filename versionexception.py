@@ -1,7 +1,6 @@
 """versionexception.py
 Author = Richard D. Fears
 Created = 2017-07-26
-LastModified = 2017-07-29
 Description = Defines the VersionException class, which is fired when attempting to load a
 	stored object which cannot be converted to the current class/structure version (e.g. because
 	the unpickled object is a newer version, or because the version jump cannot be bridged).
