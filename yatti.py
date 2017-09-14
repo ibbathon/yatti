@@ -282,6 +282,7 @@ class YattiMain:
 		self._root = tk.Tk()
 		self._root.title("YATTi - Yet Another Tracker of Time")
 		self._root.protocol("WM_DELETE_WINDOW",self._close_window)
+		self._root.iconbitmap("YATTi.ico")
 		# Grab the previous size from the settings and place the window in the center of the screen
 		rootwidth = self._settings['root width']
 		rootheight = self._settings['root height']
@@ -483,10 +484,18 @@ class YattiMain:
 
 
 if __name__ == "__main__":
-	# Using HOME now, so no need to CD to CD
-	#import os
-	#os.chdir(os.path.dirname(os.path.abspath(__file__)))
-	import sys, traceback
+	import os, sys, traceback
+	# cd to the script directory
+	try:
+		if getattr(sys,'frozen',False):
+			# The app is frozen, so get the dir of the executable
+			os.chdir(os.path.dirname(os.path.abspath(sys.executable)))
+		else:
+			# The app is not frozen, so we should use the location of the script file
+			os.chdir(os.path.dirname(os.path.abspath(__file__)))
+	except Exception as e:
+		print("No execute access to script directory")
+		raise
 	# Check if we were passed the debug flag
 	if len(sys.argv) > 1 and sys.argv[1] == "--debug":
 		DEBUG = True
