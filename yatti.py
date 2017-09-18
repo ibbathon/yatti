@@ -299,13 +299,23 @@ class YattiMain:
 		menubar = tk.Menu(self._root)
 		self._root.config(menu=menubar)
 		# File menu
-		filemenu = tk.Menu(menubar, tearoff=0)
+		filemenu = tk.Menu(menubar, tearoff=False)
 		menubar.add_cascade(label="File",underline=0,menu=filemenu)
 		filemenu.add_command(label="Save",underline=0,command=self._write_all_files)
 		# Timer menu
-		timermenu = tk.Menu(menubar, tearoff=0)
+		timermenu = tk.Menu(menubar, tearoff=False)
 		menubar.add_cascade(label="Timers",underline=0,menu=timermenu)
 		timermenu.add_command(label="Add New Timer",underline=0,command=self._add_timer)
+		timermenu.add_command(label="Sort Timers by Title",underline=0,
+			command=self._sort_timers_title)
+		# Options menu
+		optionsmenu = tk.Menu(menubar, tearoff=False)
+		menubar.add_cascade(label="Options",underline=0,menu=optionsmenu)
+		self._pause_other_timers_var = tk.BooleanVar()
+		self._pause_other_timers_var.set(self._settings['pause other timers'])
+		optionsmenu.add_checkbutton(label="Pause other timers when timer started",underline=0,
+			command=lambda self=self,target='pause other timers': self._options_toggle(target),
+			variable=self._pause_other_timers_var)
 		### Left pane ###
 		# Timer button frame
 		timerframeouter = tk.Frame(self._root)
@@ -346,7 +356,15 @@ class YattiMain:
 		"""_close_window internal function
 		Callback for when the main window is closed. Saves all files and then exits.
 		"""
+		# Kill all running timers
+		for timer in self._timers:
+			timer.running = False
+		if self._dataeditor_updater != None:
+			self._root.after_cancel(self._dataeditor_updater)
+			self._dataeditor_updater = None
+		# By default, always save results
 		self._write_all_files()
+		# Die, die, die!
 		self._root.destroy()
 
 	def _set_current_timerbutton (self, tb):
@@ -362,6 +380,14 @@ class YattiMain:
 			self._dataeditor_updater = None
 		if self._current_timerbutton.running:
 			self._dataeditor_updater = self._root.after(500,self._update_dataeditor)
+
+	def _options_toggle (self, target):
+		"""_options_toggle internal function
+		Handles toggling an option from the Options menu. target is a string identifying
+		which checkbox got checked.
+		"""
+		if target == 'pause other timers':
+			self._settings['pause other timers'] = self._pause_other_timers_var.get()
 
 	def _update_dataeditor (self):
 		"""_update_dataeditor internal function
@@ -441,6 +467,38 @@ class YattiMain:
 		self._canvas_reconfigure()
 		self._canvas.yview_moveto(1)
 
+	def _sort_timers_title (self):
+		"""_sort_timers_title internal function
+		Sorts the timer list by the titles of the timers.
+		"""
+		# Remember which timers were selected/running.
+		current_timer_data = None
+		running_timers = []
+		if self._current_timerbutton != None:
+			current_timer_data = self._current_timerbutton._data
+			self._current_timerbutton = None
+		for timer in self._timers:
+			if timer.running:
+				running_timers.append(timer._data)
+				timer.running = False
+		# Remove all the old timer buttons and re-add in sorted order.
+		for timer in self._timers:
+			timer.destroy()
+		self._timers = []
+		self._data['timerdata'].sort(key=lambda i: i['title'])
+		self._load_timers_from_json()
+		# Restart any running timers
+		for timer in self._timers:
+			if timer._data in running_timers:
+				timer.running = True
+		# Reselect the previously selected timer
+		for timer in self._timers:
+			if timer._data == current_timer_data:
+				self._current_timerbutton = timer
+				# Also check if the selected timer is running; if so, run the logic for such
+				if timer._data in running_timers:
+					self._timer_toggled(timer)
+
 	def _timer_toggled (self, thetimer):
 		"""_timer_toggled callback function
 		The function which is called for each timer when said timer is toggled.
@@ -449,7 +507,7 @@ class YattiMain:
 		if self._settings['pause other timers'] and thetimer.running:
 			for timer in self._timers:
 				if timer != thetimer:
-					timer.turn_off()
+					timer.running = False
 		# If there is a running dataeditor updater, cancel it before checking if we should start
 		# a new one
 		if self._dataeditor_updater != None:

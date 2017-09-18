@@ -36,7 +36,7 @@ class TimerButton (tk.Frame):
 			'overlapping intervals':True,
 			'adjacent intervals':True,
 			'delete short':True,
-			'max adjacency distance':2.0,
+			'max adjacency distance':600.0, # Allow pausing, entering description, then resuming
 			'max short distance':2.0,
 		},
 		'description truncation':{
@@ -200,7 +200,7 @@ class TimerButton (tk.Frame):
 		self.update_data()
 		self.update_theme()
 
-	def _toggle (self):
+	def _toggle (self, fire_callbacks=True):
 		"""_toggle internal function
 		Toggles the timer between running and paused.
 		"""
@@ -218,18 +218,10 @@ class TimerButton (tk.Frame):
 		# Update the font colors
 		self._update_active_theme()
 		# Call the toggle callback functions
-		for f in self._toggle_callbacks:
-			f(self)
+		if fire_callbacks:
+			for f in self._toggle_callbacks:
+				f(self)
 	
-	def turn_off (self):
-		"""turn_off function
-		Turns off the timer if it's running. Does nothing if it's not.
-		Primarily used to turn off all other running timers when starting a new one.
-		"""
-		if self.running:
-			self.running = False
-			self._toggle()
-
 	def _update_timer (self, restarttimer=True):
 		"""_update_timer internal function
 		Updates the label to the new time, as determined by the sum of the intervals in
@@ -443,7 +435,9 @@ class TimerButton (tk.Frame):
 		return bool(self._running.get())
 	@running.setter
 	def running (self, value):
-		self._running.set(value)
+		if bool(self._running.get()) != value:
+			self._running.set(value)
+			self._toggle(fire_callbacks=False)
 
 
 if __name__ == "__main__":
@@ -451,13 +445,13 @@ if __name__ == "__main__":
 	try:
 		def on_close ():
 			for timer in timers:
-				timer.turn_off()
+				timer.running = False
 			root.destroy()
 		def togglecallback (atimer):
 			if atimer.running:
 				for timer in timers:
 					if timer != atimer:
-						timer.turn_off()
+						timer.running = False
 		def labelcallback (atimer):
 			for interval in atimer._data['intervals']:
 				print(time.strftime('%Y/%m/%d %H:%M:%S',time.localtime(interval[0])),'-',
