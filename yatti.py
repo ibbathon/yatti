@@ -15,6 +15,7 @@ from appdirs import AppDirs
 import helper
 from timerbutton import TimerButton
 from dataeditor import DataEditor
+from csvexport import CSVExport
 
 class YattiMain:
 	"""YattiMain class
@@ -30,6 +31,7 @@ class YattiMain:
 		'calendar':{},
 		'timerbuttons':{},
 		'dataeditor':{},
+		'csvexport':{},
 		'base':{
 			'buttons':{},
 		},
@@ -41,6 +43,7 @@ class YattiMain:
 	DEFAULT_SETTINGS = {
 		'version':[1,0,0],
 		'timerbuttons':{},
+		'csvexport':{},
 		'root width':1200,
 		'root height':800,
 		'pause other timers':True,
@@ -308,6 +311,10 @@ class YattiMain:
 		timermenu.add_command(label="Add New Timer",underline=0,command=self._add_timer)
 		timermenu.add_command(label="Sort Timers by Title",underline=0,
 			command=self._sort_timers_title)
+		# Export menu
+		exportmenu = tk.Menu(menubar, tearoff=False)
+		menubar.add_cascade(label="Export",underline=1,menu=exportmenu)
+		exportmenu.add_command(label="Export to CSV",underline=10,command=self._export_to_csv)
 		# Options menu
 		optionsmenu = tk.Menu(menubar, tearoff=False)
 		menubar.add_cascade(label="Options",underline=0,menu=optionsmenu)
@@ -450,6 +457,18 @@ class YattiMain:
 		"""
 		for data in self._data['timerdata']:
 			self._add_timer(data)
+
+	def _export_to_csv (self):
+		"""_export_to_csv internal function
+		Sets up and runs the CSV export class to export current data to CSV.
+		"""
+		exportwindow = CSVExport(self._root,self._data,
+			self._settings['csvexport'],self._theme['csvexport'])
+		self._root.wait_window(exportwindow)
+		for timer in self._timers:
+			timer.update_data()
+		if self._current_timerbutton != None:
+			self._dataeditor.update_data_for_key('intervals')
 
 	def _add_timer (self, timerdata=None):
 		"""_add_timer internal function

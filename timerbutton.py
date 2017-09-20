@@ -36,7 +36,7 @@ class TimerButton (tk.Frame):
 			'overlapping intervals':True,
 			'adjacent intervals':True,
 			'delete short':True,
-			'max adjacency distance':600.0, # Allow pausing, entering description, then resuming
+			'max adjacency distance':120.0, # Allow pausing, entering description, then resuming
 			'max short distance':2.0,
 		},
 		'description truncation':{
