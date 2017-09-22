@@ -395,6 +395,14 @@ class DataEditor (tk.Frame):
 		for f in self._save_callbacks:
 			f(errors)
 
+	def clear_data (self):
+		"""clear_data function
+		Simply sets the internal data dict to None and disables all fields.
+		This should be called anytime the underlying data is deleted.
+		"""
+		self._data = None
+		self.enable(rootfields=False)
+
 	def register_save_callback (self, function):
 		"""register_save_callback function
 		Registers a function which will be called when the save finishes.
@@ -427,10 +435,21 @@ class DataEditor (tk.Frame):
 				for button in field['buttons']:
 					helper.configThemeFromDict(button,self._theme,'base','buttons')
 
+	def update_data (self):
+		"""update_data function
+		Updates the data for all keys.
+		"""
+		if self._data == None:
+			return
+		for field in self._conf:
+			self.update_data_for_key(field['key'])
+
 	def update_data_for_key (self, key):
 		"""update_data_for_key function
 		Updates the data for a single key, allowing running timers to update the data editor.
 		"""
+		if self._data == None:
+			return
 		for i,field in enumerate(self._conf):
 			if field['key'] == key:
 				if field['type'] == 'table':

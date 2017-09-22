@@ -24,7 +24,7 @@ if sys.platform == "win32":
 
 setup(
 	name = "YATTi",
-	version = "0.1",
+	version = "0.1.1",
 	description = "YATTi - Yet Another Tracker of Time",
 	options = {'build_exe':build_exe_options},
 	executables = [Executable("yatti.py", base=base, icon="YATTi.ico")]

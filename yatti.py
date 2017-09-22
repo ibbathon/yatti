@@ -8,6 +8,7 @@ Description = Main file of the YATTi program. Builds and displays all of the nec
 # Tk imports
 import tkinter as tk
 import tkinter.font as tkfont
+import tkinter.messagebox as tkmessagebox
 # Standard Python library imports
 import os, sys, json, base64, time
 from appdirs import AppDirs
@@ -309,8 +310,13 @@ class YattiMain:
 		timermenu = tk.Menu(menubar, tearoff=False)
 		menubar.add_cascade(label="Timers",underline=0,menu=timermenu)
 		timermenu.add_command(label="Add New Timer",underline=0,command=self._add_timer)
+		timermenu.add_separator()
 		timermenu.add_command(label="Sort Timers by Title",underline=0,
 			command=self._sort_timers_title)
+		timermenu.add_command(label="Archive Exported Time Slices",underline=8,
+			command=self._archive_intervals)
+		timermenu.add_command(label="Archive Selected Timer",underline=10,
+			command=self._archive_selected_timer)
 		# Export menu
 		exportmenu = tk.Menu(menubar, tearoff=False)
 		menubar.add_cascade(label="Export",underline=1,menu=exportmenu)
@@ -488,7 +494,15 @@ class YattiMain:
 
 	def _sort_timers_title (self):
 		"""_sort_timers_title internal function
-		Sorts the timer list by the titles of the timers.
+		Sorts the timer list by the titles of the timers and then reload the list.
+		"""
+		self._data['timerdata'].sort(key=lambda i: i['title'])
+		self._reload_timers()
+
+	def _reload_timers (self):
+		"""_reload_timers internal function
+		Removes and then readds all of the timerbuttons. Remembers running timers and selected
+		timer. Used whenever timers are removed or change order in the data.
 		"""
 		# Remember which timers were selected/running.
 		current_timer_data = None
@@ -504,7 +518,6 @@ class YattiMain:
 		for timer in self._timers:
 			timer.destroy()
 		self._timers = []
-		self._data['timerdata'].sort(key=lambda i: i['title'])
 		self._load_timers_from_json()
 		# Restart any running timers
 		for timer in self._timers:
@@ -517,6 +530,108 @@ class YattiMain:
 				# Also check if the selected timer is running; if so, run the logic for such
 				if timer._data in running_timers:
 					self._timer_toggled(timer)
+
+	def _archive_intervals (self):
+		"""_archive_intervals callback function
+		Wrapper function which calls _archive_timer_intervals for each timer in the data.
+		"""
+		numexported = 0
+		error = False
+		failedtimers = []
+		for timer in self._timers:
+			returnval = self._archive_timer_intervals(timer)
+			if returnval >= 0:
+				numexported += returnval
+			else:
+				error = True
+				failedtimers.append(timer)
+		if error:
+			tkmessagebox.showerror(title="Failed to Archive",
+				message=("Failed to archive intervals for {} timers.\n"+ \
+					"Successfully archived {} intervals from {} timers.").format(
+						len(failedtimers),numexported,len(self._timers)-len(failedtimers)))
+		else:
+			tkmessagebox.showinfo(title="Archived Successfully",
+				message="Successfully archived {} intervals from {} timers.".format(
+						numexported,len(self._timers)-len(failedtimers)))
+		# At the very end, update the data editor (we don't want to do this for every timer)
+		self._dataeditor.update_data()
+
+	def _archive_timer_intervals (self, timer, exportedonly=True):
+		"""_archive_timer_intervals internal function
+		Removes intervals from a timer and puts them in separate "archive" files.
+		If exportedonly is False, unexported time will also be archived.
+		"""
+		timerdata = timer._data
+		filename = "YATTi_archive_"+timerdata['title']+".json"
+		filedir = self._dirs.user_data_dir
+		# First try to read in the file, in case there's any existing data
+		archivedata = {}
+		try:
+			with open(filedir+os.sep+filename,'r') as f:
+				archivedata = json.load(f)
+		except:
+			# TODO: log some debug data
+			pass
+		# Fill in the timer details (we don't care about version)
+		archivedata['title'] = timerdata['title']
+		archivedata['description'] = timerdata['description']
+		archivedata['source system'] = timerdata['source system']
+		# Gather the intervals we want to export
+		exportintervals = []
+		for interval in timerdata['intervals']:
+			if interval[2] or not exportedonly:
+				exportintervals.append(interval)
+		# Next, merge any existing data and our current timer data
+		if 'intervals' in archivedata and type(archivedata['intervals']) == type([]):
+			archivedata['intervals'] += exportintervals
+		else:
+			archivedata['intervals'] = exportintervals
+		# Finally, try to write it out
+		if self._write_file("Archive",archivedata,filedir,filename):
+			# If we succeeded in writing the intervals out, remove them from current data
+			# and then update the timer (and possibly the data editor)
+			for interval in exportintervals:
+				timerdata['intervals'].remove(interval)
+			timer.update_data()
+			return len(exportintervals)
+		else:
+			return -1
+
+	def _archive_selected_timer (self):
+		"""_archive_selected_timer callback function
+		Archives all intervals for the currently-selected timer and then removes the whole
+		timer from the list of timers.
+		"""
+		timer = self._current_timerbutton
+		if timer == None:
+			return
+		# Shut down any related afters
+		if timer.running:
+			timer.running = False
+		if self._dataeditor_updater != None:
+			self._root.after_cancel(self._dataeditor_updater)
+			self._dataeditor_updater = None
+		self._dataeditor.enable(False)
+		# Archive all intervals
+		success = self._archive_timer_intervals(timer,exportedonly=False)
+		if success == -1:
+			tkmessagebox.showerror(title="Failed to Archive Intervals",
+				message="Intervals for selected timer could not be archived.\n"+ \
+				"Timer will not be removed.")
+			return
+		# Intervals were successfully removed; update data editor and then disable it
+		self._dataeditor.update_data()
+		self._dataeditor.clear_data()
+		# Remove the timer completely
+		self._data['timerdata'].remove(timer._data)
+		timer.pack_forget()
+		timer.destroy()
+		self._timers.remove(timer)
+		self._current_timerbutton = None
+		# Notify the user
+		tkmessagebox.showinfo(title="Timer Successfully Archived",
+			message="Timer successfully archived. {} intervals archived.".format(success))
 
 	def _timer_toggled (self, thetimer):
 		"""_timer_toggled callback function
