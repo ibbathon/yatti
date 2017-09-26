@@ -10,7 +10,7 @@ import tkinter as tk
 import tkinter.font as tkfont
 import tkinter.messagebox as tkmessagebox
 # Standard Python library imports
-import os, sys, json, base64, time
+import os, sys, json, base64, time, platform, math
 from appdirs import AppDirs
 # My code imports
 import helper
@@ -215,6 +215,8 @@ class YattiMain:
 			self._dirs = AppDirs(appname="YATTi",appauthor="GrayShadowSoftware")
 		configprefix = self._dirs.user_config_dir
 		dataprefix = self._dirs.user_data_dir
+		# Get the current OS (may need to modify this later)
+		self._running_os = platform.system()
 		# First read in the settings file
 		self._settingsfilename = "settings.json"
 		self._settings = self._load_file_or_defaults("settings",
@@ -258,6 +260,7 @@ class YattiMain:
 				else:
 					thedict = json.loads(wrapperfunc(fileobj.read()))
 		# If we can't, default to a basic dict
+		# TODO: Switch to debug log
 		except:
 			print("No "+filename+" file found. Creating default "+dictname+".",file=sys.stderr)
 			thedict = {}
@@ -331,12 +334,13 @@ class YattiMain:
 			variable=self._pause_other_timers_var)
 		### Left pane ###
 		# Timer button frame
-		timerframeouter = tk.Frame(self._root)
-		timerframeouter.grid(column=1,row=1,sticky='ns')
-		self._canvas = tk.Canvas(timerframeouter)
+		self._timerframeouter = tk.Frame(self._root)
+		self._timerframeouter.grid(column=1,row=1,sticky='ns')
+		self._canvas = tk.Canvas(self._timerframeouter)
 		self._timerframe = tk.Frame(self._canvas)
 		self._timerframe.pack()
-		timerscrollbar = tk.Scrollbar(timerframeouter,orient='vertical',command=self._canvas.yview)
+		timerscrollbar = tk.Scrollbar(self._timerframeouter,orient='vertical',
+			command=self._canvas.yview)
 		self._canvas.config(yscrollcommand=timerscrollbar.set)
 		timerscrollbar.pack(side='right',fill='y',expand=True)
 		self._canvas.pack(side='left',fill='y',expand=True)
@@ -358,6 +362,13 @@ class YattiMain:
 		self._dataeditor.register_save_callback(self._data_editor_saved)
 		self._dataeditorerrors = tk.Label(dataeditorframe,text=" ")
 		self._dataeditorerrors.pack()
+
+		### Scrollwheel enablement ###
+		if self._running_os in ("Windows","Darwin"):
+			self._root.bind_all("<MouseWheel>",self._mousewheel_callback)
+		elif self._running_os == "Linux":
+			self._root.bind_all("<Button-4>",self._mousewheel_callback)
+			self._root.bind_all("<Button-5>",self._mousewheel_callback)
 
 		### Adding timer buttons and reconfiguring ###
 		self._load_timers_from_json()
@@ -410,7 +421,7 @@ class YattiMain:
 		self._dataeditor_updater = self._root.after(500,self._update_dataeditor)
 
 	def _data_editor_saved (self, errors):
-		"""_data_editor_saved internal function
+		"""_data_editor_saved callback function
 		Called when the data editor save button is clicked. Updates the timer button data.
 		"""
 		if self._current_timerbutton == None:
@@ -420,6 +431,32 @@ class YattiMain:
 			self._dataeditorerrors.configure(fg='red',text=str(len(errors))+" errors while saving")
 		else:
 			self._dataeditorerrors.configure(fg='dark green',text="Saved successfully")
+
+	def _mousewheel_callback (self, e):
+		"""_mousewheel_callback callback function
+		Called when the mousewheel is scrolled anywhere. Uses winfo to figure out which widget
+		currently holds the pointer focus and then uses Tk's "parent as a substring of child"
+		naming convention.
+		"""
+		x,y = self._root.winfo_pointerxy()
+		widget = self._root.winfo_containing(x,y)
+		try:
+			str(widget).index(str(self._timerframeouter))
+			isovercanvas = True
+		except:
+			isovercanvas = False
+
+		if isovercanvas:
+			if self._running_os == "Windows":
+				scrolldir = -1 if e.delta<0 else 1
+				scrollby = -1*math.ceil(abs(e.delta)/120)
+			elif self._running_os == "Darwin":
+				scrolldir = -1 if e.delta<0 else 1
+				scrollby = -1*abs(e.delta)
+			elif self._running_os == "Linux":
+				scrolldir = -1 if e.delta<0 else 1
+				scrollby = -1*math.ceil(abs(e.delta)/120)
+			self._canvas.yview_scroll(scrolldir*scrollby,'units')
 
 	def _write_all_files (self):
 		"""_write_all_files internal function
@@ -451,6 +488,7 @@ class YattiMain:
 					fileobj.write(wrapperfunc(json.dumps(sourcedict,"\t",separators=(', ',':'))))
 			return True
 		# If we can't, notify the user
+		# TODO: Switch to debug file
 		except:
 			print(dictname+" JSON could not be written to "+(filedir+os.sep+filename)+".",
 				file=sys.stderr)
