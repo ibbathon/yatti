@@ -304,7 +304,7 @@ class YattiMain:
 		self._root = tk.Tk()
 		self._root.title("YATTi - Yet Another Tracker of Time")
 		self._root.protocol("WM_DELETE_WINDOW",self._close_window)
-		self._root.iconbitmap("YATTi.ico")
+		#self._root.iconbitmap("YATTi.ico")
 		# Grab the previous size from the settings and place the window in the center of the screen
 		rootwidth = self._settings['root width']
 		rootheight = self._settings['root height']
@@ -520,7 +520,7 @@ class YattiMain:
 				if wrapperfunc == None:
 					json.dump(sourcedict,fileobj,indent="\t",separators=(', ',':'))
 				else:
-					fileobj.write(wrapperfunc(json.dumps(sourcedict,"\t",separators=(', ',':'))))
+					fileobj.write(wrapperfunc(json.dumps(sourcedict,indent="\t",separators=(', ',':'))))
 			return True
 		# If we can't, notify the user
 		# TODO: Switch to debug file
