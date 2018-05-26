@@ -163,6 +163,8 @@ class TimerButton (tk.Frame):
 		self._toggle_callbacks = []
 		# The callbacks array for when any other part of the widget is clicked
 		self._labelclick_callbacks = []
+		# The callbacks array for start qualifications
+		self._startqual_callbacks = []
 
 		# Update the timerdata, timersettings, and timertheme parameters (or set to defaults)
 		self._data = helper.dictVersionUpdate(timerdata,self._data_version_update,
@@ -207,12 +209,19 @@ class TimerButton (tk.Frame):
 		# Before any start or stop, sort the intervals
 		self._data['intervals'].sort()
 		if self.running:
-			self._start_button.configure(text=helper.PAUSE_CHAR)
-			self._curr_start_time = time.time()
-			self._timer_updater = self.after(500,self._update_timer)
+			startallowed = True
+			for cb in self._startqual_callbacks:
+				startallowed = startallowed and cb(self)
+			if startallowed:
+				self._start_button.configure(text=helper.PAUSE_CHAR)
+				self._curr_start_time = time.time()
+				self._timer_updater = self.after(500,self._update_timer)
+			else:
+				self.running = False
 		else:
 			self._start_button.configure(text=helper.PLAY_CHAR)
-			self.after_cancel(self._timer_updater)
+			if self._timer_updater != None:
+				self.after_cancel(self._timer_updater)
 			self._update_timer(restarttimer=False)
 			self._curr_start_time = None
 		# Update the font colors
@@ -429,6 +438,12 @@ class TimerButton (tk.Frame):
 		self._desc_label.bind('<Button-1>', lambda e,self=self: callback(self))
 		self._timer_label.bind('<Button-1>', lambda e,self=self: callback(self))
 		self.bind('<Button-1>', lambda e,self=self: callback(self))
+
+	def register_startqual_callback (self, callback):
+		"""Registers a callback which should accept 1 argument (the timerbutton) and return a
+		boolean. This callback is called whenever the user attempts to start the timer. If it
+		returns False, then the timer is not allowed to start."""
+		self._startqual_callbacks.append(callback)
 
 	@property
 	def running (self):

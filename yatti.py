@@ -75,14 +75,17 @@ class YattiMain:
 		'timerdata':[],
 	}
 	DATA_CONFIG = [
-		{'type':'string','text':"Title/Ticket",'key':'title'},
-		{'type':'string','text':"Description",'key':'description'},
-		{'type':'string','text':"Source System",'key':'source system'},
-		{'type':'table','text':"Intervals",'key':'intervals','columns':[
-			{'type':'datetime','text':"Start"},
-			{'type':'datetime','text':"End"},
-			{'type':'boolean','text':"Exported"},
-			{'type':'string','text':"Description"},
+		{'type':'string','text':"Title/Ticket",'key':'title','width':20},
+		{'type':'string','text':"Description",'key':'description','width':30},
+		{'type':'string','text':"Source System",'key':'source system','width':20},
+		{'type':'table','text':"Intervals",'key':'intervals','runningdisable':True,
+			'numdatacolumns':4,'columns':[
+			{'type':'datetime','dataindex':0,'text':"Start",'width':19,'runningdisable':True},
+			{'type':'datetime','dataindex':1,'text':"End",'width':19,'runningdisable':True},
+			{'type':'interval','sourceindexes':[0,1],'text':"Length",'width':8,
+				'runningdisable':True},
+			{'type':'boolean','dataindex':2,'text':"Exported",'runningdisable':True},
+			{'type':'string','dataindex':3,'text':"Description",'width':50},
 		]},
 	]
 	OLDEST_CONVERTIBLE_PASSWORDS_VERSION = [1,0,0]
@@ -269,17 +272,29 @@ class YattiMain:
 		thedict = helper.dictVersionUpdate(thedict,updatefunc,defaults)
 		return thedict
 
-	def _canvas_reconfigure (self):
-		"""_canvas_reconfigure callback function
-		Reconfigures the canvas's scrollregion and width when its view is reconfigured.
-		"""
+	def _timerframecanvas_reconfigure (self):
+		"""Reconfigures the timer list's canvas's scrollregion and width when its view is
+		reconfigured."""
 		# Only reconfigure the canvas if it's already been rendered
-		if not self._canvas.winfo_viewable():
-			self._canvas.after(20,self._canvas_reconfigure)
+		if not self._timerframecanvas.winfo_viewable():
+			self._timerframecanvas.after(20,self._timerframecanvas_reconfigure)
 			return
-		self._canvas.config(
-			scrollregion=self._canvas.bbox('all'),
+		self._timerframecanvas.config(
+			scrollregion=self._timerframecanvas.bbox('all'),
 			width=self._timerframe.winfo_width()
+		)
+
+	def _dataeditorcanvas_reconfigure (self):
+		"""Reconfigures the data editor's canvas's scrollregion and width when its view is
+		reconfigured."""
+		# Only reconfigure the canvas if it's already been rendered
+		if not self._dataeditorcanvas.winfo_viewable():
+			self._dataeditorcanvas.after(20,self._dataeditorcanvas_reconfigure)
+			return
+		self._dataeditor.update_idletasks()
+		print("Reconfigure; size:",self._dataeditor.winfo_width(),self._dataeditor.winfo_height())
+		self._dataeditorcanvas.config(
+			scrollregion=self._dataeditorcanvas.bbox('all')
 		)
 
 	def run (self):
@@ -336,32 +351,53 @@ class YattiMain:
 		# Timer button frame
 		self._timerframeouter = tk.Frame(self._root)
 		self._timerframeouter.grid(column=1,row=1,sticky='ns')
-		self._canvas = tk.Canvas(self._timerframeouter)
-		self._timerframe = tk.Frame(self._canvas)
-		self._timerframe.pack()
+		self._timerframecanvas = tk.Canvas(self._timerframeouter)
+		self._timerframe = tk.Frame(self._timerframecanvas)
+		self._timerframe.pack(fill='both',expand=True)
 		timerscrollbar = tk.Scrollbar(self._timerframeouter,orient='vertical',
-			command=self._canvas.yview)
-		self._canvas.config(yscrollcommand=timerscrollbar.set)
+			command=self._timerframecanvas.yview)
+		self._timerframecanvas.config(yscrollcommand=timerscrollbar.set)
 		timerscrollbar.pack(side='right',fill='y',expand=True)
-		self._canvas.pack(side='left',fill='y',expand=True)
-		self._canvas.create_window((0,0),window=self._timerframe,anchor='nw')
-		self._timerframe.bind('<Configure>',lambda e,self=self: self._canvas_reconfigure)
+		self._timerframecanvas.pack(side='left',fill='y',expand=True)
+		self._timerframecanvas.create_window((0,0),window=self._timerframe,anchor='nw')
+		self._timerframe.bind('<Configure>',lambda e,self=self: self._timerframecanvas_reconfigure)
 		# Add quick-add button
 		self._button_font = tkfont.Font()
 		self._quick_add_button = tk.Button(self._root,font=self._button_font,
 			text="Quick-Add Timer",command=self._add_timer)
 		self._quick_add_button.grid(column=1,row=2)
+		tempbutton = tk.Button(self._root,text="Test",command=lambda self=self:self._dataeditor.event_generate('<Configure>'))
+		tempbutton.grid(column=1,row=3)
 
 		### Right pane ###
+		### Data Editor ###
 		self._current_timerbutton = None
 		self._dataeditor_updater = None
-		dataeditorframe = tk.Frame(self._root)
-		dataeditorframe.grid(row=1,column=2,rowspan=2,sticky='nw')
-		self._dataeditor = DataEditor(dataeditorframe,self.DATA_CONFIG,self._theme['dataeditor'])
+		self._dataeditorframe = tk.Frame(self._root)
+		self._dataeditorframe.grid(row=1,column=2,rowspan=2,sticky='nsew')
+		self._dataeditorframe.grid_columnconfigure(0,weight=1)
+		self._dataeditorframe.grid_rowconfigure(0,weight=1)
+		self._dataeditorcanvas = tk.Canvas(self._dataeditorframe)
+		self._dataeditor = DataEditor(self._dataeditorcanvas,self.DATA_CONFIG,
+			self._theme['dataeditor'])
 		self._dataeditor.pack()
 		self._dataeditor.register_save_callback(self._data_editor_saved)
-		self._dataeditorerrors = tk.Label(dataeditorframe,text=" ")
-		self._dataeditorerrors.pack()
+		# Scrollbars
+		dataeditorvertscrollbar = tk.Scrollbar(self._dataeditorframe,orient='vertical',
+			command=self._dataeditorcanvas.yview)
+		dataeditorvertscrollbar.grid(row=0,column=1,sticky='ns')
+		dataeditorhorzscrollbar = tk.Scrollbar(self._dataeditorframe,orient='horizontal',
+			command=self._dataeditorcanvas.xview)
+		dataeditorhorzscrollbar.grid(row=1,column=0,sticky='ew')
+		self._dataeditorcanvas.config(
+			yscrollcommand=dataeditorvertscrollbar.set,
+			xscrollcommand=dataeditorhorzscrollbar.set
+		)
+		# Pack it up
+		self._dataeditorcanvas.grid(row=0,column=0,sticky='nsew')
+		self._dataeditorcanvas.create_window((0,0),window=self._dataeditor,anchor='nw')
+		self._dataeditor.bind('<Configure>',
+			lambda e,self=self: self._dataeditorcanvas_reconfigure())
 
 		### Scrollwheel enablement ###
 		if self._running_os in ("Windows","Darwin"):
@@ -397,13 +433,16 @@ class YattiMain:
 		"""
 		self._current_timerbutton = tb
 		self._dataeditor.load_data(self._current_timerbutton._data)
-		self._dataeditor.enable(tables=not self._current_timerbutton.running)
+		self._dataeditor.enable_all()
+		self._dataeditorcanvas_reconfigure()
 
 		if self._dataeditor_updater != None:
 			self._root.after_cancel(self._dataeditor_updater)
 			self._dataeditor_updater = None
 		if self._current_timerbutton.running:
 			self._dataeditor_updater = self._root.after(500,self._update_dataeditor)
+			# Disable the intervals table
+			self._dataeditor.disable_for_running()
 
 	def _options_toggle (self, target):
 		"""_options_toggle internal function
@@ -417,7 +456,7 @@ class YattiMain:
 		"""_update_dataeditor internal function
 		Updates the intervals section of the data editor, allowing a running timer.
 		"""
-		self._dataeditor.update_data_for_key('intervals')
+		self._dataeditor.update_data_running()
 		self._dataeditor_updater = self._root.after(500,self._update_dataeditor)
 
 	def _data_editor_saved (self, errors):
@@ -427,10 +466,6 @@ class YattiMain:
 		if self._current_timerbutton == None:
 			return
 		self._current_timerbutton.update_data()
-		if len(errors) > 0:
-			self._dataeditorerrors.configure(fg='red',text=str(len(errors))+" errors while saving")
-		else:
-			self._dataeditorerrors.configure(fg='dark green',text="Saved successfully")
 
 	def _mousewheel_callback (self, e):
 		"""_mousewheel_callback callback function
@@ -456,7 +491,7 @@ class YattiMain:
 			elif self._running_os == "Linux":
 				scrolldir = -1 if e.delta<0 else 1
 				scrollby = -1*math.ceil(abs(e.delta)/120)
-			self._canvas.yview_scroll(scrolldir*scrollby,'units')
+			self._timercanvas.yview_scroll(scrolldir*scrollby,'units')
 
 	def _write_all_files (self):
 		"""_write_all_files internal function
@@ -511,8 +546,7 @@ class YattiMain:
 		self._root.wait_window(exportwindow)
 		for timer in self._timers:
 			timer.update_data()
-		if self._current_timerbutton != None:
-			self._dataeditor.update_data_for_key('intervals')
+		self._dataeditor.clear_data()
 
 	def _add_timer (self, timerdata=None):
 		"""_add_timer internal function
@@ -527,8 +561,9 @@ class YattiMain:
 		self._timers[-1].update_theme()
 		self._timers[-1].register_toggle_callback(self._timer_toggled)
 		self._timers[-1].register_labelclick_callback(self._set_current_timerbutton)
-		self._canvas_reconfigure()
-		self._canvas.yview_moveto(1)
+		self._timers[-1].register_startqual_callback(self._start_allowed)
+		self._timerframecanvas_reconfigure()
+		self._timerframecanvas.yview_moveto(1)
 
 	def _sort_timers_title (self):
 		"""_sort_timers_title internal function
@@ -573,6 +608,7 @@ class YattiMain:
 		"""_archive_intervals callback function
 		Wrapper function which calls _archive_timer_intervals for each timer in the data.
 		"""
+		self._dataeditor.clear_data()
 		numexported = 0
 		error = False
 		failedtimers = []
@@ -592,8 +628,6 @@ class YattiMain:
 			tkmessagebox.showinfo(title="Archived Successfully",
 				message="Successfully archived {} intervals from {} timers.".format(
 						numexported,len(self._timers)-len(failedtimers)))
-		# At the very end, update the data editor (we don't want to do this for every timer)
-		self._dataeditor.update_data()
 
 	def _archive_timer_intervals (self, timer, exportedonly=True):
 		"""_archive_timer_intervals internal function
@@ -650,7 +684,7 @@ class YattiMain:
 		if self._dataeditor_updater != None:
 			self._root.after_cancel(self._dataeditor_updater)
 			self._dataeditor_updater = None
-		self._dataeditor.enable(False)
+		self._dataeditor.enable_all(False)
 		# Archive all intervals
 		success = self._archive_timer_intervals(timer,exportedonly=False)
 		if success == -1:
@@ -659,7 +693,6 @@ class YattiMain:
 				"Timer will not be removed.")
 			return
 		# Intervals were successfully removed; update data editor and then disable it
-		self._dataeditor.update_data()
 		self._dataeditor.clear_data()
 		# Remove the timer completely
 		self._data['timerdata'].remove(timer._data)
@@ -680,15 +713,25 @@ class YattiMain:
 			for timer in self._timers:
 				if timer != thetimer:
 					timer.running = False
-		# If there is a running dataeditor updater, cancel it before checking if we should start
-		# a new one
-		if self._dataeditor_updater != None:
-			self._root.after_cancel(self._dataeditor_updater)
-			self._dataeditor_updater = None
-		if thetimer == self._current_timerbutton:
-			self._dataeditor.enable(tables=not self._current_timerbutton.running)
+		# Select the timer if we just started it
+		if thetimer.running:
+			self._set_current_timerbutton(thetimer)
 			if self._current_timerbutton.running:
 				self._dataeditor_updater = self._root.after(500,self._update_dataeditor)
+		# If the timer is not running, but is selected anyways, enable editing
+		elif thetimer == self._current_timerbutton:
+			self._dataeditor.enable_all()
+			# If there is a running dataeditor updater, cancel it
+			if self._dataeditor_updater != None:
+				self._root.after_cancel(self._dataeditor_updater)
+				self._dataeditor_updater = None
+
+	def _start_allowed (self, timer):
+		"""Callback function to determine if the timer button is allowed to actually start."""
+		# Check if the data editor is initialized and has unsaved updates
+		if self._dataeditor.check_all_field_statuses():
+			return False
+		return True
 
 	def update_theme (self):
 		"""update_theme function
