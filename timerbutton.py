@@ -409,8 +409,7 @@ class TimerButton (tk.Frame):
         )
 
         # Before updating any of the sub-widgets, turn on grid-propagation so
-        # they will expand
-        # the main frame
+        # they will expand the main frame
         self.grid_propagate(True)
         # Update the theme for each of the sub-widgets and fonts
         for widget,name in widgets:

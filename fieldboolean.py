@@ -67,6 +67,15 @@ class FieldBoolean (tk.Checkbutton):
         """
         self._update_callbacks.append(cb)
 
+    def update_status (self, newstatus, *oldstatuses):
+        """Changes the field status to the given new status, executing all
+        necessary changes in the process. If oldstatuses are given, it only
+        changes the field status if the current status is one of the given
+        old statuses.
+        """
+        if len(oldstatuses) == 0 or self.status in oldstatuses:
+            self.status = newstatus
+
     def advance_status (self):
         """Called when the DataEditor is saved. Advances from UNSAVED to SAVED
         and from SAVED to UNTOUCHED.

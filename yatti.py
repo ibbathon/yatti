@@ -337,8 +337,6 @@ class YattiMain:
             self._dataeditorcanvas.after(20,self._dataeditorcanvas_reconfigure)
             return
         self._dataeditor.update_idletasks()
-        print("Reconfigure; size:",self._dataeditor.winfo_width(),
-            self._dataeditor.winfo_height())
         self._dataeditorcanvas.config(
             scrollregion=self._dataeditorcanvas.bbox('all')
         )
@@ -660,7 +658,6 @@ class YattiMain:
             )
         )
         self._timers[-1].pack()
-        self._timers[-1].update_theme()
         self._timers[-1].register_toggle_callback(self._timer_toggled)
         self._timers[-1].register_labelclick_callback(
             self._set_current_timerbutton
