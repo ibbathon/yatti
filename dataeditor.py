@@ -23,8 +23,8 @@ class DataEditor (tk.Frame):
     DEFAULT_THEME = {
         'version':[1,0,0],
         'base':{
-            'widget':{'bg':'SystemButtonFace',},
-            'basic':{'fg':'black','bg':'SystemButtonFace',},
+            'widget':{'bg':'gray',},
+            'basic':{'fg':'black','bg':'gray',},
             'labels':{},
             'entries':{},
             'checkboxes':{},
