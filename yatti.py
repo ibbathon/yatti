@@ -836,9 +836,6 @@ class YattiMain:
         # Select the timer if we just started it
         if thetimer.running:
             self._set_current_timerbutton(thetimer)
-            if self._current_timerbutton.running:
-                self._dataeditor_updater = self._root.after(
-                    500,self._update_dataeditor)
         # If the timer is not running, but is selected anyways, enable editing
         elif thetimer == self._current_timerbutton:
             self._dataeditor.enable_all()
