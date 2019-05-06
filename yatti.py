@@ -104,6 +104,8 @@ class YattiMain:
         'trac':'',
     }
 
+    PERIODIC_WRITE_PERIOD=10000
+
     def _settings_version_update (self, oldsettings):
         """_settings_version_update internal function
         Updates the old settings to the new format, based on relative versions.
@@ -480,6 +482,10 @@ class YattiMain:
         self._load_timers_from_json()
         self.update_theme()
 
+        ### Kick off a periodic write timer ###
+        self._periodic_write_timer = self._root.after(
+            self.PERIODIC_WRITE_PERIOD,self._periodic_write)
+
         self._root.mainloop()
 
     def _close_window (self):
@@ -497,6 +503,16 @@ class YattiMain:
         self._write_all_files()
         # Die, die, die!
         self._root.destroy()
+
+    def _periodic_write (self):
+        """_periodic_write internal function
+        Periodically writes all files to drive, to prevent data loss from
+        crashes.
+        TODO: Make this optional.
+        """
+        self._write_all_files()
+        self._periodic_write_timer = self._root.after(
+            self.PERIODIC_WRITE_PERIOD,self._periodic_write)
 
     def _set_current_timerbutton (self, tb):
         """_set_current_timerbutton internal function
