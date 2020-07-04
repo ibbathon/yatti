@@ -42,9 +42,10 @@ class YattiMain:
     }
     OLDEST_CONVERTIBLE_SETTINGS_VERSION = [1,0,0]
     DEFAULT_SETTINGS = {
-        'version':[1,0,0],
+        'version':[1,1,0],
         'timerbuttons':{},
         'csvexport':{},
+        'dataeditor':{},
         'root width':1200,
         'root height':800,
         'pause other timers':True,
@@ -133,6 +134,12 @@ class YattiMain:
                 oldsettings['version'],
                 YattiMain.DEFAULT_SETTINGS['version']
             )
+
+        # Version 1.1.0:
+        # Introduced the "dataeditor" subsettings.
+        if oldsettings['version'] < [1,1]:
+            oldsettings['dataeditor'] = {}
+            oldsettings['version'] = [1,1]
 
         # Finally, convert incrementally through all the versions
         # Below is some sample code to copy:
@@ -366,42 +373,7 @@ class YattiMain:
         self._root.grid_columnconfigure(2,weight=1)
         self._root.grid_rowconfigure(1,weight=1)
         self._timers = []
-        ### Menu ###
-        menubar = tk.Menu(self._root)
-        self._root.config(menu=menubar)
-        # File menu
-        filemenu = tk.Menu(menubar, tearoff=False)
-        menubar.add_cascade(label="File",underline=0,menu=filemenu)
-        filemenu.add_command(label="Save",underline=0,
-            command=self._write_all_files)
-        # Timer menu
-        timermenu = tk.Menu(menubar, tearoff=False)
-        menubar.add_cascade(label="Timers",underline=0,menu=timermenu)
-        timermenu.add_command(label="Add New Timer",underline=0,
-            command=self._add_timer)
-        timermenu.add_separator()
-        timermenu.add_command(label="Sort Timers by Title",underline=0,
-            command=self._sort_timers_title)
-        timermenu.add_command(label="Archive Exported Time Slices",underline=8,
-            command=self._archive_intervals)
-        timermenu.add_command(label="Archive Selected Timer",underline=10,
-            command=self._archive_selected_timer)
-        # Export menu
-        exportmenu = tk.Menu(menubar, tearoff=False)
-        menubar.add_cascade(label="Export",underline=1,menu=exportmenu)
-        exportmenu.add_command(label="Export to CSV",underline=10,
-            command=self._export_to_csv)
-        # Options menu
-        optionsmenu = tk.Menu(menubar, tearoff=False)
-        menubar.add_cascade(label="Options",underline=0,menu=optionsmenu)
-        self._pause_other_timers_var = tk.BooleanVar()
-        self._pause_other_timers_var.set(self._settings['pause other timers'])
-        optionsmenu.add_checkbutton(
-            label="Pause other timers when timer started",underline=0,
-            command=lambda self=self,target='pause other timers': \
-                           self._options_toggle(target),
-            variable=self._pause_other_timers_var
-        )
+
         ### Left pane ###
         # Timer button frame
         self._timerframeouter = tk.Frame(self._root)
@@ -443,7 +415,7 @@ class YattiMain:
         self._dataeditorframe.grid_rowconfigure(0,weight=1)
         self._dataeditorcanvas = tk.Canvas(self._dataeditorframe)
         self._dataeditor = DataEditor(self._dataeditorcanvas,self.DATA_CONFIG,
-            self._theme['dataeditor'])
+            self._theme['dataeditor'],self._settings['dataeditor'])
         self._dataeditor.pack()
         self._dataeditor.register_save_callback(self._data_editor_saved)
         # Scrollbars
@@ -481,6 +453,63 @@ class YattiMain:
         ### Adding timer buttons and reconfiguring ###
         self._load_timers_from_json()
         self.update_theme()
+
+        ### Menu ###
+        # We add the menu after everything else so it will be able to pull
+        # config settings from the sub-settings (e.g. dataeditor's visibility)
+        menubar = tk.Menu(self._root)
+        self._root.config(menu=menubar)
+        # File menu
+        filemenu = tk.Menu(menubar, tearoff=False)
+        menubar.add_cascade(label="File",underline=0,menu=filemenu)
+        filemenu.add_command(label="Save",underline=0,
+            command=self._write_all_files)
+        # Timer menu
+        timermenu = tk.Menu(menubar, tearoff=False)
+        menubar.add_cascade(label="Timers",underline=0,menu=timermenu)
+        timermenu.add_command(label="Add New Timer",underline=0,
+            command=self._add_timer)
+        timermenu.add_separator()
+        timermenu.add_command(label="Sort Timers by Title",underline=0,
+            command=self._sort_timers_title)
+        timermenu.add_command(label="Archive Exported Time Slices",underline=8,
+            command=self._archive_intervals)
+        timermenu.add_command(label="Archive Selected Timer",underline=10,
+            command=self._archive_selected_timer)
+        # Export menu
+        exportmenu = tk.Menu(menubar, tearoff=False)
+        menubar.add_cascade(label="Export",underline=1,menu=exportmenu)
+        exportmenu.add_command(label="Export to CSV",underline=10,
+            command=self._export_to_csv)
+        # Options menu
+        optionsmenu = tk.Menu(menubar, tearoff=False)
+        menubar.add_cascade(label="Options",underline=0,menu=optionsmenu)
+        self._pause_other_timers_var = tk.BooleanVar()
+        self._pause_other_timers_var.set(self._settings['pause other timers'])
+        optionsmenu.add_checkbutton(
+            label="Pause other timers when timer started",underline=0,
+            command=lambda self=self,target='pause other timers': \
+                           self._options_toggle(target),
+            variable=self._pause_other_timers_var
+        )
+        self._hide_exported_var = tk.BooleanVar()
+        self._hide_exported_var.set(self._settings['dataeditor'] \
+                ['visibility']['hide exported'])
+        optionsmenu.add_checkbutton(
+            label="Hide exported slices",underline=0,
+            command=lambda self=self,target='hide exported': \
+                           self._options_toggle(target),
+            variable=self._hide_exported_var
+        )
+        self._hide_other_days_var = tk.BooleanVar()
+        self._hide_other_days_var.set(self._settings['dataeditor'] \
+                ['visibility']['hide other days'])
+        optionsmenu.add_checkbutton(
+            label="Hide old slices",underline=0,
+            command=lambda self=self,target='hide other days': \
+                           self._options_toggle(target),
+            variable=self._hide_other_days_var
+        )
 
         ### Kick off a periodic write timer ###
         self._periodic_write_timer = self._root.after(
@@ -541,6 +570,16 @@ class YattiMain:
         if target == 'pause other timers':
             self._settings['pause other timers'] = \
                 self._pause_other_timers_var.get()
+        elif target == 'hide exported':
+            self._settings['dataeditor']['visibility']['hide exported'] = \
+                self._hide_exported_var.get()
+            if self._current_timerbutton != None:
+                self._set_current_timerbutton(self._current_timerbutton)
+        elif target == 'hide other days':
+            self._settings['dataeditor']['visibility']['hide other days'] = \
+                self._hide_other_days_var.get()
+            if self._current_timerbutton != None:
+                self._set_current_timerbutton(self._current_timerbutton)
 
     def _update_dataeditor (self):
         """_update_dataeditor internal function

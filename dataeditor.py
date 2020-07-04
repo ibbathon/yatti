@@ -8,7 +8,8 @@ Description = Provides the DataEditor Tk widget. This widget provides a
 import tkinter as tk
 import tkinter.font as tkfont
 # Standard Python library imports
-import importlib,copy
+import importlib,copy,time
+from datetime import date
 # My code imports
 import helper
 from fieldbase import FieldBase
@@ -46,6 +47,17 @@ class DataEditor (tk.Frame):
         },
     }
 
+    OLDEST_CONVERTIBLE_SETTINGS_VERSION = [1,0,0]
+    DEFAULT_SETTINGS = {
+        'version':[1,0,0],
+        'visibility':{
+            'hide other days':False,
+            'hide exported':False,
+            'end time index':1,
+            'exported index':2,
+        },
+    }
+
     def _theme_version_update (self, oldtheme):
         """_theme_version_update internal function
         Updates the old theme to the new format, based on relative versions.
@@ -76,7 +88,39 @@ class DataEditor (tk.Frame):
         #    oldtheme['somevariable'] = oldtheme['oldvariable']
         #    oldtheme['version'] = [1,1]
 
-    def __init__ (self, parent, conf, dataeditortheme=None, *args, **options):
+    def _settings_version_update (self, oldsettings):
+        """_settings_version_update internal function
+        Updates the old settings to the new format, based on relative versions.
+        """
+        # Check for versions which are incompatible with
+        # list-of-numbers versions
+        try:
+            oldsettings['version'] < [0]
+        except:
+            raise VersionException(
+                VersionException.BAD_TYPE,oldsettings['version']
+            )
+
+        # If the data version is later than the program version, we will
+        # not know how to convert
+        if oldsettings['version'] > DataEditor.DEFAULT_SETTINGS['version']:
+            raise VersionException(VersionException.TOO_NEW,
+                oldsettings['version'],DataEditor.DEFAULT_SETTINGS['version'])
+
+        # If the old version is too old, we will not know how to convert
+        if oldsettings['version'] \
+                < DataEditor.OLDEST_CONVERTIBLE_SETTINGS_VERSION:
+            raise VersionException(VersionException.TOO_OLD,
+                oldsettings['version'],DataEditor.DEFAULT_SETTINGS['version'])
+
+        # Finally, convert incrementally through all the versions
+        # Below is some sample code to copy:
+        #if oldsettings['version'] < [1,1]:
+        #    oldsettings['somevariable'] = oldsettings['oldvariable']
+        #    oldsettings['version'] = [1,1]
+
+    def __init__ (self, parent, conf, dataeditortheme=None,
+            dataeditorsettings=None, *args, **options):
         """DataEditor constructor
         Builds a grid of labels and text boxes based on the provided
         configuration. The text boxes can later be
@@ -133,11 +177,17 @@ class DataEditor (tk.Frame):
         # Classes for the field types
         self._field_types = {}
 
-        # Update the dataeditortheme parameters (or set to defaults)
+        # Update the dataeditortheme and dataeditorsettings parameters
+        # (or set to defaults)
         self._theme = helper.dictVersionUpdate(
             dataeditortheme,
             self._theme_version_update,
             self.DEFAULT_THEME
+        )
+        self._settings = helper.dictVersionUpdate(
+            dataeditorsettings,
+            self._settings_version_update,
+            self.DEFAULT_SETTINGS
         )
 
         # Load the basic types of fields; others will be dynamically loaded
@@ -363,6 +413,20 @@ class DataEditor (tk.Frame):
         # TODO: Actually implement said rec calc fields.
         numcols = field['numdatacolumns']
         for i in range(len(data)):
+            hide_row = False
+            # Before we begin building this row, let's check if the options
+            # say to hide it.
+            if self._settings['visibility']['hide exported']:
+                if data[i][self._settings['visibility']['exported index']]:
+                    hide_row = True
+            if self._settings['visibility']['hide other days']:
+                today = time.mktime(date.today().timetuple())
+                timer_end = data[i][
+                    self._settings['visibility']['end time index']
+                ]
+                if timer_end < today:
+                    hide_row = True
+            # Now we know we should show it, so go through the data config.
             for j, column in enumerate(field['columns']):
                 # If this is a raw-data column, just feed the data into the
                 # constructor
@@ -373,13 +437,15 @@ class DataEditor (tk.Frame):
                 else:
                     sources = column['sourceindexes'][:]
                     for k in range(len(sources)):
-                        sources[k] = field['columns'][sources[k]]['rows'][i]
+                        sources[k] = field['columns'][sources[k]] \
+                                ['rows'][i]
                     entry = self._create_field(field['frame'],column,sources)
                 # Store the entry, size it, and grid it
                 column['rows'].append(entry)
                 if 'width' in column:
                     entry.config(width=column['width'])
-                entry.grid(column=j,row=i+1,sticky='ew')
+                if not hide_row:
+                    entry.grid(column=j,row=i+1,sticky='ew')
             # Create the delete button for this row
             button = tk.Button(
                 field['frame'],text='-',font=self._buttons_font,
@@ -387,7 +453,8 @@ class DataEditor (tk.Frame):
                     self._delete_row(field,rowindex)
             )
             field['buttons'].append(button)
-            button.grid(column=len(field['columns'])+1,row=i+1)
+            if not hide_row:
+                button.grid(column=len(field['columns'])+1,row=i+1)
         # Create the add-row button
         button = tk.Button(
             field['frame'],text='+',font=self._buttons_font,
